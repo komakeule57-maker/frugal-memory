@@ -158,15 +158,16 @@ see [A Note on Language](#a-note-on-language).
 
 ## Some Numbers
 
-Measured on one real dataset of ~1,300 entries — evidence from one
-installation, not a benchmark:
+Measured on one real dataset that grew from ~900 to ~1,900 entries along
+the way — evidence from one installation, not a benchmark:
 
-- **3.9× cheaper than reading markdown files** for the same three real
-  questions (5,846 vs. 22,978 tokens). The gap grows with file size,
-  because reading a file is all-or-nothing: one question against a
-  188 KB project file costs 94,152 tokens.
-- **82.3 % Recall@10** against the public LoCoMo dataset, untuned, first
-  run, at 2 ms and 2.7 KB per query.
+- **4.8× cheaper than reading markdown files**, in real tokens, over 275
+  real questions (2,359 vs. 11,319 per question). The gap grows with the
+  dataset and with file size, because reading a file is all-or-nothing:
+  one question against a 188 KB project file costs 94,152 tokens.
+- **82.3 % Recall@10** against the public LoCoMo dataset with a session as
+  the unit, **45.1 %** with a single dialogue turn — untuned, first run, at
+  2 ms and 2.7 KB per query.
 - **73 % smaller returns** from the preview, with a calculable worst case.
 - **−23 % expected characters per question** from the feedback loop, at
   84 % vs. 73 % first-round hit rate, measured over 164 questions from 30
@@ -204,7 +205,7 @@ see [The Ranking Fix, Corrected Twice](docs/MEASUREMENTS.md#the-ranking-fix-corr
 | [docs/MEASUREMENTS.md](docs/MEASUREMENTS.md) | what was measured, and the known limitations |
 | [docs/FACTCHECK.md](docs/FACTCHECK.md) | the opt-in fact check: setup, what it can and cannot do |
 | [docs/IMPORT.md](docs/IMPORT.md) | importing an existing folder of notes, and the damage that did |
-| [`messung/`](messung/) | the seven underlying measurement reports (German) |
+| [`messung/`](messung/) | the eight underlying measurement reports (mostly German) |
 
 ## A Note on Language
 
@@ -256,7 +257,7 @@ script and the measurement reports. The English stemmer is new and has
 | `requirements.txt` | just `mcp` |
 | `memory.db` | the database — created on first use, never committed |
 
-`messung/` keeps the seven measurement **reports**. The scripts that
+`messung/` keeps the eight measurement **reports**. The scripts that
 produced them and their raw data are not included: they only run against
 the author's own dataset, and the raw data is a verbatim transcript of
 real working sessions.

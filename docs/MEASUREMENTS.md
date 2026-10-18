@@ -2,17 +2,78 @@
 
 What was measured, against what, and where it did not hold up.
 
-The four underlying reports live in [`../messung/`](../messung/) and are
-written in German:
+Everything here comes from one installation and one user's dataset, which
+grew from about 900 to 1,900 entries while these measurements were taken —
+so each section names the size it was measured at. Unless a section says
+otherwise, the rule is the same throughout: the criterion is fixed before
+the measurement, and **under 10 % relative difference is a tie**.
+
+The underlying reports live in [`../messung/`](../messung/), mostly in
+German:
 
 | | |
 |---|---|
-| [MESSKRITERIUM.md](../messung/MESSKRITERIUM.md) | the criterion, fixed in writing **before** the measurement — so the result could not be argued into shape afterwards |
-| [ERGEBNIS.md](../messung/ERGEBNIS.md) | server vs. a folder of markdown files: cost per answered question |
-| [TOKEN-MESSUNG.md](../messung/TOKEN-MESSUNG.md) | the same comparison in real tokens, after the "3 characters per token" assumption turned out to be wrong |
+| [MESSKRITERIUM.md](../messung/MESSKRITERIUM.md) | the criterion for the comparison with markdown files, fixed in writing **before** the measurement — so the result could not be argued into shape afterwards |
+| [ERGEBNIS.md](../messung/ERGEBNIS.md) | server vs. a folder of markdown files: cost per answered question (2026-09-15) |
+| [TOKEN-MESSUNG.md](../messung/TOKEN-MESSUNG.md) | the same comparison in real tokens, after the "3 characters per token" assumption turned out to be wrong (2026-09-16) |
+| [ERGEBNIS-2026-09-25.md](../messung/ERGEBNIS-2026-09-25.md) | the comparison repeated ten days later on more than twice the questions, and the ranking figure corrected |
 | [SCHEMA-BEFUND.md](../messung/SCHEMA-BEFUND.md) | what using an FTS5 index as the store actually cost, and what the rebuild did and did not fix |
+| [RUECKKOPPLUNG.md](../messung/RUECKKOPPLUNG.md) | the criterion and bench for the feedback loop |
+| [RANGFOLGE-2026-09-25.md](../messung/RANGFOLGE-2026-09-25.md) | eight ranking levers, eight measurements, none adopted |
+| [FIXKOSTEN-AUDIT.md](../messung/FIXKOSTEN-AUDIT.md) | what the tool definitions cost per session, and what shortening them would save |
+
+The scripts behind them are not included: they only run against the
+author's own dataset, and their raw data is a verbatim transcript of real
+working sessions.
 
 ## Measured
+
+### Server vs. Markdown Files
+
+The question that started it all: is the server worth it compared with
+what Claude Code does by default — one markdown file per fact, found with
+`grep`, read with `Read`? Measured as the cost of an answered question,
+with real questions harvested from session transcripts, and the same
+content in both forms.
+
+| | 2026-09-15 | 2026-09-25 |
+|---|---:|---:|
+| real questions with a known answer | 117 from 30 sessions | 275 from 89 sessions |
+| live entries | 1,171 | 1,757 |
+| A: `recall` → `zeige`, characters per question | 4,152 | 4,471 |
+| B: one file per fact, `grep` + `Read` | 17,428 | 22,072 |
+| **B / A** | **4.2×** | **4.9×** |
+| B: answer among the five files read | 66 % | 53 % |
+
+In real tokens (2026-09-25) it is **2,359 against 11,319 per question,
+4.8×**. Characters were the right proxy all along: measured on 690 tool
+results, `.md` files, previews and full texts all come to 1.87–1.90
+characters per token, so the factor cancels out.
+
+**The gap grew with the dataset.** A stayed flat (+7.7 %, a tie) while
+the dataset grew by half, because the preview is capped at eight lines. B
+grew with it, because `grep` does: 64 matching files per question in the
+median, then 134. `grep` has no ranking, so whoever reads five files gets
+the answer about half the time.
+
+**For a small file it is a tie, and that tie carries no verdict.** An
+earlier token measurement on three questions (2026-09-16) gave 5,846
+against 22,978 tokens, 3.9× — but its first question, against a 3 KB file,
+differed by 78 tokens (3.8 %), while a single entry that `zeige` was asked
+for weighed 642. One id fewer and the sign would have flipped. Both paths
+are the same order of magnitude when the file name already answers the
+question; the server's advantage comes from file size, because `Read` does
+not read partially. One question against a 188 KB project file costs
+94,152 tokens.
+
+**What this does not show: that the search is good.** It is a cost
+advantage, not a quality verdict. After a `recall`, 38 % of the questions
+were rephrased on 2026-09-15 and 30 % on 2026-09-25; empty answers fell
+from 8.3 % to 2.0 %. And the answer on A's side is found by construction —
+the gold *is* what `zeige` fetched next — so A's hit rate cannot be read
+off this bench.
+
+### Search Against `grep`
 
 Against 898 real entries (34 memo files, paragraph by paragraph), 14
 realistic questions, and 60 each of inflection and compound cases
@@ -33,6 +94,19 @@ files, strictly judged.
 For an open question ("tell me about project X"), the gap was bigger than
 in these individual questions: 2 calls at 8.1 KB against 185 KB for
 "find the file and read it whole" — a factor of 23.
+
+### LoCoMo
+
+2026-09-10, against the public LoCoMo dataset of English conversations,
+first run, nothing tuned: **Recall@10 of 82.3 % when a session is the
+unit, 45.1 % when a single dialogue turn is**, at 2.04 ms and 2.7 KB per
+query. The German morphology raised the session figure from 79.4 %: its
+stemmer also strips English plural and verb endings. (This was before the
+English mode existed.)
+
+The turn figure is the stricter one. A LoCoMo conversation has 19 to 32
+sessions, so ten session hits already cover a third to half of it. The
+script and per-question results are not part of this repository.
 
 ### Preview vs. Full Text
 
@@ -111,6 +185,29 @@ acquittal of the relevance guard.
 asked. The bench only knows the 265 real queries, and inventing questions is
 ruled out — they would be invented by the same system that is being
 measured.
+
+### The Ranking Fix, Corrected Twice
+
+A one-line ranking fix, found by measuring where real search sessions had
+failed, raises the hit rate on 47 real reformulation chains from
+**53 % to 64 %**. Until 2026-09-21 the README gave **64 % → 77 %**. Two
+things were wrong with that figure, and they are wrong in different ways
+([ERGEBNIS-2026-09-25.md](../messung/ERGEBNIS-2026-09-25.md)).
+
+The **numbers** were too high because the hit count scanned the output for
+any `#id`, which also catches the `[[#1234]]` cross-references *inside*
+another hit's title line. That was a counting bug and it was there from the
+first run; on the original dataset, counted strictly, the pair is
+49 % → 68 %.
+
+The **claim that the fix was free** was true when it was written and is not
+true any more. Re-run against the 2026-09-15 snapshot, the fix *gains* 3 of
+the 117 questions that already worked; against today's, 29 % more entries
+later, it *loses* 3. Net over both sets: +12 of 164 then, +2 of 164 now. More
+entries mean more competition for the same eight slots, and this fix spends
+part of that budget on morphological variants — so its value shrinks as the
+dataset grows. The direction still holds; the margin is thinner than
+published, and getting thinner.
 
 ### One Slot per Chain
 
@@ -361,29 +458,6 @@ one line pointing at another project's entry, not a wrong answer. And how
 often a project session actually asks for general knowledge was not
 measured at all.
 
-### The Ranking Fix, Corrected Twice
-
-A one-line ranking fix, found by measuring where real search sessions had
-failed, raises the hit rate on 47 real reformulation chains from
-**53 % to 64 %**. Until 2026-09-21 the README gave **64 % → 77 %**. Two
-things were wrong with that figure, and they are wrong in different ways
-([ERGEBNIS-2026-09-25.md](../messung/ERGEBNIS-2026-09-25.md)).
-
-The **numbers** were too high because the hit count scanned the output for
-any `#id`, which also catches the `[[#1234]]` cross-references *inside*
-another hit's title line. That was a counting bug and it was there from the
-first run; on the original dataset, counted strictly, the pair is
-49 % → 68 %.
-
-The **claim that the fix was free** was true when it was written and is not
-true any more. Re-run against the 2026-09-15 snapshot, the fix *gains* 3 of
-the 117 questions that already worked; against today's, 29 % more entries
-later, it *loses* 3. Net over both sets: +12 of 164 then, +2 of 164 now. More
-entries mean more competition for the same eight slots, and this fix spends
-part of that budget on morphological variants — so its value shrinks as the
-dataset grows. The direction still holds; the margin is thinner than
-published, and getting thinner.
-
 ## Limitations
 
 - **`grep` beats it at compounds** (57/60 vs. 31/60). That's not a defect,
@@ -394,8 +468,9 @@ published, and getting thinner.
 - **Language mixing** — not solvable in the tool, but solvable by the
   caller. Term search never finds an English-written memo via a German
   question. That needs meaning instead of word overlap, and FTS5 doesn't
-  have that. The rule therefore lives in the context file instead of the
-  code: **if the German phrasing turns up nothing, ask the same question
+  have that. The rule therefore lives with the caller — in the context
+  file or the shipped [skill](../skills/mcp-memory/SKILL.md) — instead of
+  the code: **if the German phrasing turns up nothing, ask the same question
   with English terms — and vice versa.** In both directions, the gap is
   mirror-symmetric.
 
@@ -415,9 +490,11 @@ published, and getting thinner.
   measured), and the caller still has to follow the pointer. The tool is
   project-bound in how it is used, not in what the search can find.
 - **Has to be invoked.** An always-loaded context file sits there
-  passively; this tool doesn't. A pointer in the context file ("you reach
-  your memory via `recall`") is therefore more effective than any
-  improvement to the search itself.
+  passively; this tool doesn't, and a search that is never called finds
+  nothing. Hence the pointer in the context file ("you reach your memory
+  via `recall`") and the [skill](../skills/mcp-memory/SKILL.md) with the
+  working rules. The skill is itself loaded on demand; whether an agent
+  picks it up without being told has not been measured.
 - ~~`remember` loads the split dictionary from the index on every call; at
   ~900 entries that's around 30 ms. Grows with the dataset.~~ **Fixed on
   2026-09-15**: `zerlege` now only asks for substrings of the word being
