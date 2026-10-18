@@ -238,6 +238,46 @@ piece was listed. Counting "gold or a sibling of its chain", it is 81.2 %
 either way. A single run's latency swung between +5 and +16 %, hence the
 median.
 
+### One Spelling for Umlauts
+
+German has two spellings for the same word: "Blättern" and "Blaettern".
+The FTS5 tokenizer folds "ä" to "a", not to "ae", so the two never met.
+14.4 % of real queries contain an umlaut or "ß". Since schema version 6
+(2026-10-18) the index holds one spelling: ä/ae → a, ö/oe → o, ü/ue → u,
+ß → ss, computed by SQLite itself in two generated columns, so it cannot
+drift; what is shown stays the original text.
+
+The first attempt did it on the query side instead — each term as
+`("Blättern" OR "Blaettern")` — and was dropped: bm25 rates each variant
+by its own rarity, so a stray "LOEVE" outranked the common "LÖVE" of the
+entry asked for, and four questions lost their rank-1 hit to an unrelated
+entry. In the index there is only one term with one rarity.
+
+Measured on a copy of a 2,141-entry dataset, 178 real questions with a gold
+answer (each question counted once), feedback loop off, `limit=8`; the
+comparison arm is the same source with the switch off:
+
+| | off | on |
+|---|---|---|
+| real questions, gold at rank 1 | 43.3 % | 42.7 % |
+| real questions, gold among the 8 | 83.1 % | 83.1 % |
+| first questions of chains, gold among the 8 (50) | 68.0 % | 66.0 % |
+| 42 real questions, rewritten into the other spelling: among the 8 | 81.0 % | **88.1 %** |
+| latency (median of 5 alternating runs) | 3.52 ms | 3.60 ms (+2.2 %) |
+
+The same 42 questions in their original spelling reach 88.1 % — the
+rebuild recovers the whole loss. The criterion fixed beforehand asked for
++10 %, and that was set badly: the gain cannot exceed the loss, and the
+loss was 3 of 42 questions, so +8.8 % was the ceiling. By the letter of
+the plan the change failed; it is in because it is a bug fix with no
+measured harm, the same footing as one slot per chain. The small loss also
+says the gap rarely bites: a median query carries five terms, and the
+others usually find the entry anyway.
+
+Opening a schema-5 database rebuilds it once (7.8 s on 2,141 entries, file
+size unchanged). A guest connection opens read-only and does not migrate,
+so both machines of a guest pair have to be updated together.
+
 ### The Cascade Against Plain OR
 
 Measured 2026-10-04, prompted by a comparison with another memory tool whose

@@ -61,6 +61,59 @@ def test_terme_nimmt_einzelne_ziffern_mit():
     assert ms._terme("a Deck") == ["Deck"]
 
 
+def test_umlaut_umschrift_und_grundbuchstabe_finden_sich():
+    """Stand 6: `unicode61` faltet "ä" auf "a", nicht auf "ae" - "Blättern"
+    fand "Blaettern" nie (14 % der echten Anfragen tragen einen Umlaut). Der
+    Index fuehrt deshalb eine Schreibweise; "LÖVE" findet weiter "LOVE"
+    (messung/umschrift_index_2026-10-18)."""
+    ms.remember("Blaettern im Titelindex geht seitenweise", tags="doku", art="schnittstelle")
+    ms.remember("Das Gebäude brennt im dritten Akt", tags="doku", art="entscheidung")
+    ms.remember("Ein LOEVE-Fenster unter Xvfb", tags="doku", art="fallstrick")
+    ms.remember("Ein LOVE-Fenster ohne Umlaut", tags="doku", art="fallstrick")
+    assert "Titelindex" in ms.recall("Blättern"), ms.recall("Blättern")
+    assert "dritten Akt" in ms.recall("Gebaeude"), ms.recall("Gebaeude")
+    assert "Titelindex" in ms.recall("Blättern seitenweise")  # UND-Stufe und Wortfolge
+    for frage in ("LÖVE", "LOEVE", "LOVE"):
+        antwort = ms.recall(frage)
+        assert "Xvfb" in antwort and "ohne Umlaut" in antwort, (frage, antwort)
+    # Markenklausel und handgeschriebene Syntax sprechen dieselbe Schreibweise.
+    assert "dritten Akt" in ms.recall("Gebäude", marke="doku")
+    assert "Titelindex" in ms.recall('"Blättern"')
+
+
+def test_einheit_sql_und_python_falten_gleich():
+    """Die generierten Spalten falten in SQL, die Anfrage in Python. Weichen
+    die beiden ab, trifft die Anfrage den Index nicht mehr - lautlos."""
+    conn = ms._connect()
+    proben = ["Blättern", "BLÄTTERN", "Gebaeude", "LÖVE", "LOEVE", "Straße", "STRAẞE",
+              "Übung", "ÜBUNG", "Feuer neue Quelle", "Aerger Öl Ärger", "does Poet"]
+    for p in proben:
+        sql = conn.execute(f"SELECT {ms._einheit_sql('?')}".replace("'?'", "?"), (p,)).fetchone()[0]
+        assert sql == ms._einheitlich(p), (p, sql, ms._einheitlich(p))
+    conn.close()
+
+
+def test_schalterwechsel_baut_den_index_um():
+    """Wer UMSCHRIFT umstellt, bekommt beim naechsten Oeffnen einen Index in
+    der neuen Schreibweise - und keinen, der halb alt und halb neu ist."""
+    ms.remember("Blaettern im Titelindex", tags="doku", art="schnittstelle")
+    alt = ms.UMSCHRIFT
+    try:
+        ms.UMSCHRIFT = False
+        conn = ms._connect()
+        conn.execute("INSERT INTO suche(suche, rank) VALUES ('integrity-check', 1)")
+        assert conn.execute("SELECT wert FROM schema WHERE schluessel='einheit'").fetchone()[0] == "roh"
+        conn.close()
+        assert "Titelindex" not in ms.recall("Blättern"), "roh ist das alte Verhalten"
+        ms.UMSCHRIFT = True
+        conn = ms._connect()
+        conn.execute("INSERT INTO suche(suche, rank) VALUES ('integrity-check', 1)")
+        conn.close()
+        assert "Titelindex" in ms.recall("Blättern")
+    finally:
+        ms.UMSCHRIFT = alt
+
+
 def test_wortfolge_steht_vor_der_haeufigkeit():
     """#1422: bei AND ueber getrennte Token wertet BM25 nur Haeufigkeit, nicht
     Nachbarschaft. Der Eintrag mit genau der gesuchten Folge stand auf Rang 7."""
@@ -398,7 +451,8 @@ def test_kompositum_mit_umlaut_zerfaellt():
     conn = ms._connect()
     teile = conn.execute("SELECT teile FROM eintrag WHERE id = 2").fetchone()[0]
     conn.close()
-    assert "bildschirm" in teile and "fläche" in teile, f"teile = '{teile}'"
+    # Seit Stand 6 in der Schreibweise des Index ("fläche" -> "flache").
+    assert "bildschirm" in teile and ms._einheitlich("fläche") in teile, f"teile = '{teile}'"
 
 
 def test_woerterbuch_waechst_beim_speichern_mit():
@@ -1440,8 +1494,8 @@ def test_sprachwechsel_ohne_nachziehen_wird_abgewiesen():
         stems = conn.execute("SELECT stems FROM eintrag WHERE id = 1").fetchone()[0]
         conn.close()
         assert marke == "en", marke
-        assert stems == morphologie.stamm_spalte(
-            "Der Zuendschluessel liegt im Handschuhfach. auto"), stems
+        assert stems == morphologie.stamm_spalte(ms._einheitlich(
+            "Der Zuendschluessel liegt im Handschuhfach. auto")), stems
 
 
 def test_neuer_bestand_traegt_die_sprache_des_servers():

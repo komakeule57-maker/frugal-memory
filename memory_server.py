@@ -54,7 +54,7 @@ GASTWERKZEUGE = ("recall", "zeige", "themen", "show", "topics")  # deutsch und e
 # da, nie ein Suchwort. Bis Stand 4 war das eine Verabredung (`UNINDEXED`) in
 # einer Tabelle, die alles indiziert; seit Stand 5 ist es Bauart, weil der
 # Index eine eigene Sache ist und `eintrag` der Speicher (#1425, #1453).
-INDEXSPALTEN = ("content", "tags", "stems", "teile")
+INDEXSPALTEN = ("ncontent", "ntags", "stems", "teile")
 
 # Aus `content`+`tags` gerechnete Spalten. Wer eine der beiden Quellen
 # schreibt, MUSS diese beiden nachziehen - sonst driften sie lautlos (#1424).
@@ -63,7 +63,7 @@ ABGELEITET = ("stems", "teile")
 # Stand des Datenbankaufbaus. Ohne diese Zahl merkt keine Migration, dass sie
 # faellig ist - das Schema aus dem Code abzuleiten reicht nicht, denn
 # `CREATE TABLE IF NOT EXISTS` sieht eine veraltete Tabelle fuer voll an (#1426).
-SCHEMA_STAND = 5
+SCHEMA_STAND = 6
 
 # SQLites Vorgabe sind 5 s, danach fliegt "database is locked" (#1427). Der
 # Wert gilt JE VERBINDUNG und muss bei jedem Oeffnen neu gesetzt werden.
@@ -94,6 +94,19 @@ DECKEL_OFFEN = 8
 # gar keiner. Wer den Verdacht hat, dass der Speicher verdorben ist, stellt
 # das hier ab und raeumt `nachfrage` auf, statt die Suche zu beschuldigen.
 RUECKKOPPLUNG = True
+
+# Eine Schreibweise im Index: ä/ae -> a, ö/oe -> o, ü/ue -> u, ß -> ss. Der
+# Tokenizer `unicode61` faltet "ä" auf "a", nicht auf "ae" - "Blättern" und
+# "Blaettern" trafen sich bis Stand 5 nie, obwohl 14 % der echten Anfragen
+# einen Umlaut tragen und der Bestand beide Schreibweisen fuehrt. Auf "a" und
+# nicht auf "ae", damit "LÖVE" weiter "LOVE" findet. Im INDEX und nicht in der
+# Anfrage: ODER-Varianten in der Anfrage wurden 2026-10-18 gemessen und
+# verworfen, weil FTS5 jede Variante mit ihrer eigenen Seltenheit wertet und
+# ein beilaeufiges seltenes "LOEVE" das haeufige "LÖVE" schlug
+# (messung/umschrift_index_2026-10-18). Ein Schalter, damit eine Messung eine
+# Codefassung mit einem Stellrad faehrt; die Datei vermerkt, mit welcher
+# Einstellung ihr Index gebaut ist (`einheit`).
+UMSCHRIFT = True
 
 # Deckel der beiden Werkzeuge, die bis 2026-10-04 lieferten, was verlangt war,
 # gleich wie viel. Anlass: "alles zu <Projekt>" kostete 26.506 Zeichen
@@ -234,7 +247,7 @@ def _marken_klausel(marke: str) -> str:
     gewollt = _marken(marke)
     if not gewollt:
         return ""
-    return "(" + " OR ".join(f'tags : "{m}"' for m in gewollt) + ")"
+    return "(" + " OR ".join(f'ntags : "{_einheitlich(m)}"' for m in gewollt) + ")"
 
 
 def _mit_marke(fts: str, klausel: str) -> str:
@@ -379,8 +392,13 @@ def _schema_sicherstellen(conn: sqlite3.Connection) -> None:
                     "braucht. Mit einem Checkout vor dem Umbau auf Stand 4 bringen, "
                     "dann hier weiter.", stand=stand))
             _umzug_auf_5(conn)
+            _nachziehen(conn)   # stems/teile des Altbestands in die Schreibweise des Index
         else:
             _speicher_anlegen(conn)
+    einheit = conn.execute("SELECT wert FROM schema WHERE schluessel = 'einheit'").fetchone()
+    if einheit is None or einheit[0] != _einheit_name():
+        _index_umbauen(conn)
+        conn.commit()
     # Nur schreiben, wenn sich etwas geaendert hat. Die Versionsnummer bei
     # jeder Verbindung neu zu setzen ist ein INSERT OR REPLACE je
     # Werkzeugaufruf - unter WAL ein fsync, und der schlaegt mit rund 5,5 ms
@@ -545,33 +563,75 @@ def _speicher_anlegen(conn: sqlite3.Connection) -> None:
           art     TEXT NOT NULL DEFAULT '{UNSORTIERT}' REFERENCES art_vokabular(art),
           art_am  TEXT,
           kopf    INTEGER REFERENCES eintrag(id),
-          nr      INTEGER
+          nr      INTEGER,
+          ncontent TEXT GENERATED ALWAYS AS ({_einheit_sql("content")}) VIRTUAL,
+          ntags    TEXT GENERATED ALWAYS AS ({_einheit_sql("tags")}) VIRTUAL
         );
         CREATE INDEX eintrag_nach_art  ON eintrag(art);
         CREATE INDEX eintrag_nach_ts   ON eintrag(ts);
         CREATE INDEX eintrag_nach_kopf ON eintrag(kopf) WHERE kopf IS NOT NULL;
+    """)
+    _index_anlegen(conn)
+    conn.execute("INSERT OR REPLACE INTO schema (schluessel, wert) VALUES ('einheit', ?)",
+                 (_einheit_name(),))
 
+
+def _index_anlegen(conn: sqlite3.Connection) -> None:
+    """`suche` ueber die generierten Spalten, samt Triggern und Vokabelsicht.
+
+    Indiziert wird `ncontent`/`ntags`, angezeigt weiter `content`. Weil die
+    Spalten in `eintrag` genauso heissen, liest External Content beim
+    `rebuild` und beim `integrity-check` dasselbe, was die Trigger einfuegen.
+    """
+    conn.executescript("""
         CREATE VIRTUAL TABLE suche USING fts5(
-            content, tags, stems, teile,
+            ncontent, ntags, stems, teile,
             content='eintrag', content_rowid='id');
 
         CREATE TRIGGER eintrag_ai AFTER INSERT ON eintrag BEGIN
-          INSERT INTO suche(rowid, content, tags, stems, teile)
-          VALUES (new.id, new.content, new.tags, new.stems, new.teile);
+          INSERT INTO suche(rowid, ncontent, ntags, stems, teile)
+          VALUES (new.id, new.ncontent, new.ntags, new.stems, new.teile);
         END;
         CREATE TRIGGER eintrag_ad AFTER DELETE ON eintrag BEGIN
-          INSERT INTO suche(suche, rowid, content, tags, stems, teile)
-          VALUES ('delete', old.id, old.content, old.tags, old.stems, old.teile);
+          INSERT INTO suche(suche, rowid, ncontent, ntags, stems, teile)
+          VALUES ('delete', old.id, old.ncontent, old.ntags, old.stems, old.teile);
         END;
         CREATE TRIGGER eintrag_au AFTER UPDATE ON eintrag BEGIN
-          INSERT INTO suche(suche, rowid, content, tags, stems, teile)
-          VALUES ('delete', old.id, old.content, old.tags, old.stems, old.teile);
-          INSERT INTO suche(rowid, content, tags, stems, teile)
-          VALUES (new.id, new.content, new.tags, new.stems, new.teile);
+          INSERT INTO suche(suche, rowid, ncontent, ntags, stems, teile)
+          VALUES ('delete', old.id, old.ncontent, old.ntags, old.stems, old.teile);
+          INSERT INTO suche(rowid, ncontent, ntags, stems, teile)
+          VALUES (new.id, new.ncontent, new.ntags, new.stems, new.teile);
         END;
 
         CREATE VIRTUAL TABLE suche_vocab USING fts5vocab(suche, col);
     """)
+
+
+def _index_umbauen(conn: sqlite3.Connection) -> int:
+    """Stand 5 -> 6, und jeder Wechsel des Schalters UMSCHRIFT.
+
+    Index und Trigger weg, die generierten Spalten mit dem heutigen Ausdruck
+    neu, `stems`/`teile` in derselben Schreibweise nachgezogen - das alles
+    OHNE Trigger, denn ein 'delete' mit Werten, die nie indiziert waren,
+    verdirbt einen External-Content-Index lautlos. Erst danach Index und
+    Trigger neu und ein `rebuild` aus `eintrag`.
+    """
+    for name in ("eintrag_ai", "eintrag_ad", "eintrag_au"):
+        conn.execute(f"DROP TRIGGER IF EXISTS {name}")
+    conn.execute("DROP TABLE IF EXISTS suche_vocab")
+    conn.execute("DROP TABLE IF EXISTS suche")
+    spalten = {r[1] for r in conn.execute("PRAGMA table_xinfo(eintrag)")}
+    for name, quelle in (("ncontent", "content"), ("ntags", "tags")):
+        if name in spalten:
+            conn.execute(f"ALTER TABLE eintrag DROP COLUMN {name}")
+        conn.execute(f"ALTER TABLE eintrag ADD COLUMN {name} TEXT "
+                     f"GENERATED ALWAYS AS ({_einheit_sql(quelle)}) VIRTUAL")
+    geaendert = _nachziehen(conn)
+    _index_anlegen(conn)
+    conn.execute("INSERT INTO suche(suche) VALUES ('rebuild')")
+    conn.execute("INSERT OR REPLACE INTO schema (schluessel, wert) VALUES ('einheit', ?)",
+                 (_einheit_name(),))
+    return len(geaendert)
 
 
 def _umzug_auf_5(conn: sqlite3.Connection) -> int:
@@ -863,7 +923,9 @@ def _ableitungen(conn: sqlite3.Connection, text: str, tags: str, vokab=None) -> 
     """
     volltext = f"{text} {tags}"
     vokab = _vokabular(conn, volltext) if vokab is None else vokab | wortschatz(volltext)
-    return stamm_spalte(volltext), teile_spalte(volltext, vokab)
+    # In der Schreibweise des Index, sonst bliebe die Umschrift-Luecke in Stufe 4.
+    return (stamm_spalte(_einheitlich(volltext)),
+            _einheitlich(teile_spalte(volltext, vokab)))
 
 
 def _nachziehen(conn: sqlite3.Connection, rids=None) -> list:
@@ -902,6 +964,53 @@ _SYNTAX_ZEICHEN = set('"*():^')  # Bindestrich NICHT: kommt in normalen Fragen v
 _OPERATOREN = {"AND", "OR", "NOT", "NEAR"}
 _WORT = re.compile(r"\w+", re.UNICODE)
 
+# Dieselbe Abbildung zweimal - in Python fuer die Anfrage, in SQL fuer die
+# generierten Spalten. Beide MUESSEN gleich falten; `test_einheit_sql_und_python`
+# haelt sie zusammen. SQLites lower() faltet nur ASCII, deshalb stehen die
+# grossen Umlaute ausdruecklich in der Liste.
+_EINHEIT = (("Ä", "a"), ("ä", "a"), ("Ö", "o"), ("ö", "o"), ("Ü", "u"), ("ü", "u"),
+            ("ẞ", "ss"), ("ß", "ss"), ("ae", "a"), ("oe", "o"), ("ue", "u"))
+
+
+def _einheitlich(text: str) -> str:
+    """Ein Text in der Schreibweise des Index (siehe UMSCHRIFT)."""
+    if not UMSCHRIFT:
+        return text
+    t = text.lower()
+    for alt, neu in _EINHEIT:
+        t = t.replace(alt, neu)
+    return t
+
+
+def _einheit_sql(spalte: str) -> str:
+    """Derselbe Ausdruck in SQL - fuer `GENERATED ALWAYS AS`."""
+    if not UMSCHRIFT:
+        return spalte
+    ausdruck = f"lower({spalte})"
+    for alt, neu in _EINHEIT:
+        ausdruck = f"replace({ausdruck}, '{alt}', '{neu}')"
+    return ausdruck
+
+
+def _einheit_name() -> str:
+    return "umschrift1" if UMSCHRIFT else "roh"
+
+
+def _einheitlich_syntax(fts: str) -> str:
+    """Handgeschriebene FTS5-Syntax in die Schreibweise des Index bringen.
+
+    Operatoren bleiben gross, und wer eine Spalte nennt, meint die des Index:
+    `content:` und `tags:` heissen dort `ncontent` und `ntags`. Umbenannt wird
+    nur, wo das Wort als Spalte steht - ein gesuchtes Wort "tags" bleibt eins.
+    """
+    def spalten(m):
+        return "{" + " ".join({"content": "ncontent", "tags": "ntags"}.get(w, w)
+                              for w in m.group(1).split()) + "}"
+    fts = re.sub(r"\{([^}]*)\}", spalten, fts)
+    fts = re.sub(r"\b(content|tags)(\s*:)", r"n\1\2", fts)
+    schonen = _OPERATOREN | set(INDEXSPALTEN)
+    return _WORT.sub(lambda m: m.group() if m.group() in schonen else _einheitlich(m.group()), fts)
+
 
 # Nennt die Anfrage selbst eine Spalte, wird sie nicht angefasst - sonst
 # widersprachen sich aeussere und innere Einschraenkung.
@@ -917,7 +1026,8 @@ def _auf_inhalt(fts: str) -> str:
     deshalb selbst mit `{content tags}`; der Ausweg fuer handgeschriebene
     Syntax tat es nicht und umging damit genau diese Sperre (#1425).
     """
-    return fts if _NENNT_SPALTE.search(fts) else f"{{content tags}} : ({fts})"
+    fts = _einheitlich_syntax(fts)
+    return fts if _NENNT_SPALTE.search(fts) else f"{{ncontent ntags}} : ({fts})"
 
 
 def _ist_explizite_syntax(query: str) -> bool:
@@ -1035,7 +1145,7 @@ def _zeile(rid, ts, content, tags, art, voll: bool, vermerk: str = "") -> str:
 
 
 def _staemme(text: str) -> set:
-    return {stem(w) for w in _WORT.findall(text) if len(w) > 2}
+    return {stem(w) for w in _WORT.findall(_einheitlich(text)) if len(w) > 2}
 
 
 def _gewichte(conn, staemme: set) -> dict:
@@ -1421,7 +1531,7 @@ def _dubletten(conn, text: str, ausser: int, schwelle: float = 0.55) -> list:
     # wiederholen, was schon in einem Chronikeintrag steht.
     zeilen, _ = _suche(
         conn,
-        " OR ".join(f'{{content tags}} : "{t}"' for t in terme),
+        " OR ".join(f'{{ncontent ntags}} : "{_einheitlich(t)}"' for t in terme),
         12,
         _filter(art="alle"),
     )
@@ -1830,12 +1940,12 @@ def _stumm_zaehlen(conn, query: str, mit_veraltet: bool, marke: str = "") -> int
     81 % einer ganzen recall-Anfrage, gegen 0,09 ms danach.
     """
     if _ist_explizite_syntax(query):
-        fts = query
+        fts = _einheitlich_syntax(query)
     else:
         terme = _terme(query)
         if not terme:
             return 0
-        fts = " AND ".join(f'{{content tags}} : "{t}"' for t in terme)
+        fts = " AND ".join(f'{{ncontent ntags}} : "{_einheitlich(t)}"' for t in terme)
     wo, args = _filter(art=",".join(STUMM), mit_veraltet=mit_veraltet)
     fts = _mit_marke(fts, _marken_klausel(marke))
     try:
@@ -2081,7 +2191,7 @@ def _kaskade_roh(conn, query: str, limit: int, filter_=("", ()),
     if not terme:
         return ([], fehler, "") if als_frage else ([], None, "")
 
-    genau = " AND ".join(f'{{content tags}} : "{t}"' for t in terme)
+    genau = " AND ".join(f'{{ncontent ntags}} : "{_einheitlich(t)}"' for t in terme)
     rows, fehler = _suche(conn, _mit_marke(genau, kl), holen, filter_)
     hinweis = als_frage
     if len(terme) > 1:
@@ -2094,14 +2204,14 @@ def _kaskade_roh(conn, query: str, limit: int, filter_=("", ()),
         # Alleinherrschaft.
         folge, _ = _suche(
             conn,
-            _mit_marke(f'{{content tags}} : "{" ".join(terme)}"', kl),
+            _mit_marke(f'{{ncontent ntags}} : "{" ".join(_einheitlich(t) for t in terme)}"', kl),
             holen,
             filter_,
         )
         if folge:
             rows = (folge + [r for r in rows if r not in folge])[:holen]
     if not rows and len(terme) > 1:
-        oder = " OR ".join(f'{{content tags}} : "{t}"' for t in terme)
+        oder = " OR ".join(f'{{ncontent ntags}} : "{_einheitlich(t)}"' for t in terme)
         rows, fehler = _suche(conn, _mit_marke(oder, kl), holen, filter_)
         if rows:
             hinweis = _t(" (ODER - kein Eintrag enthaelt alle Begriffe)") + als_frage
@@ -2112,10 +2222,10 @@ def _kaskade_roh(conn, query: str, limit: int, filter_=("", ()),
     # Wortteil vor Stamm: "Katalysator" in einem Kompositum zu finden ist
     # spezifischer als irgendeine gebeugte Form desselben Stammes.
     teil, _ = _suche(
-        conn, _mit_marke(" OR ".join(f'teile:"{t.lower()}"' for t in terme), kl), holen, filter_
+        conn, _mit_marke(" OR ".join(f'teile:"{_einheitlich(t.lower())}"' for t in terme), kl), holen, filter_
     )
     stamm, _ = _suche(
-        conn, _mit_marke(" OR ".join(f'stems:"{stem(t)}"' for t in terme), kl), holen, filter_
+        conn, _mit_marke(" OR ".join(f'stems:"{stem(_einheitlich(t))}"' for t in terme), kl), holen, filter_
     )
     morph = teil + [r for r in stamm if r not in teil]
     if not morph:

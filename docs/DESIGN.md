@@ -163,7 +163,13 @@ rebuild.
 ## Database
 
 `memory.db` next to the script. Since **schema version 5** (2026-09-15),
-`eintrag` is an **ordinary table** and `suche` is just an index over it:
+`eintrag` is an **ordinary table** and `suche` is just an index over it.
+Since **schema version 6** (2026-10-18) the index reads `ncontent`/`ntags`
+instead of `content`/`tags`: the same text in one spelling (ä/ae → a,
+ö/oe → o, ü/ue → u, ß → ss), so "Blättern" and "Blaettern" are one term.
+They are generated columns — SQLite computes them, so no write path can
+forget them. `stems`/`teile` and every query go through the same folding
+(`_einheitlich`, its SQL twin `_einheit_sql`); a test holds the two equal.
 
 ```sql
 CREATE TABLE eintrag (
@@ -172,9 +178,11 @@ CREATE TABLE eintrag (
   stems   TEXT NOT NULL DEFAULT '',  teile TEXT NOT NULL DEFAULT '',
   art     TEXT NOT NULL DEFAULT 'gemischt' REFERENCES art_vokabular(art),
   art_am  TEXT,
-  kopf    INTEGER REFERENCES eintrag(id),  nr INTEGER)
+  kopf    INTEGER REFERENCES eintrag(id),  nr INTEGER,
+  ncontent TEXT GENERATED ALWAYS AS (/* folded content */) VIRTUAL,
+  ntags    TEXT GENERATED ALWAYS AS (/* folded tags */) VIRTUAL)
 
-CREATE VIRTUAL TABLE suche USING fts5(content, tags, stems, teile,
+CREATE VIRTUAL TABLE suche USING fts5(ncontent, ntags, stems, teile,
                                       content='eintrag', content_rowid='id')
 -- three triggers keep `suche` in sync with `eintrag`
 
