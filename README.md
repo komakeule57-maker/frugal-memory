@@ -97,6 +97,20 @@ The database is created on first use as `memory.db` next to the script.
 document.** `recall` returns whole entries — store a 180 KB file as a
 single entry and you get it back as a single hit, having gained nothing.
 
+### Teaching the agent how to use it
+
+The tools alone don't tell an agent the working rules: search before
+reading files, `recall` → `zeige`, exactly one kind per entry, supersede
+instead of accumulate, retry in the other language. Those live in a skill
+that ships with the repo:
+
+```bash
+cp -r skills/mcp-memory ~/.claude/skills/
+```
+
+Claude Code loads its full text only when the memory comes up; until then
+only the one-line description sits in context.
+
 ### Reading another machine's memory
 
 Each machine keeps its own memory, and each numbers its entries from 1. A
@@ -255,6 +269,7 @@ script and the measurement reports. The English stemmer is new and has
 | `pruefpaare_gebaut.json` | the hand-built and hand-found contradiction pairs |
 | `import_memos.py` | import a file-based memory *(one-off; see docs/IMPORT.md)* |
 | `test_memory.py` | regression net, one case per pitfall (no pytest) |
+| `skills/mcp-memory/SKILL.md` | working rules for the agent, as a Claude Code skill |
 | `requirements.txt` | just `mcp` |
 | `memory.db` | the database — created on first use, never committed |
 
