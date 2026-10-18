@@ -1,15 +1,18 @@
 # mcp-memory
 
-A persistent memory for AI assistants that is just a SQLite file.
+A persistent memory for AI assistants that is just a SQLite file — and
+costs about a fifth of what reading markdown notes does.
 
 No vector store, no embeddings, no external service, no API key. Python,
 SQLite with FTS5, stdio — the only dependency is the official `mcp` SDK.
 Nothing leaves your machine unless you explicitly turn on the optional
 fact check.
 
-Built for **German-language notes**: the search understands inflection
-("Rangliste" finds "Ranglisten") and compound words ("Katalysator" finds
-"Fusionskatalysator").
+Measured over 275 real questions from 89 working sessions: **2,359 tokens
+per answered question, against 11,319** for the usual one markdown file
+per fact, found with `grep` and read whole. The gap grows as the memory
+does, because every answer here is capped and `grep` is not. All figures
+come from one installation, and the docs say where one did not hold up.
 
 ## Why
 
@@ -26,14 +29,17 @@ contradictions surface instead of quietly piling up.
 
 ## Features
 
-- **Ranked search with German morphology** — inflection and compound
-  splitting, no dictionary file needed; the dataset itself is the
-  dictionary.
+- **Capped, calculable answers** — a search returns eight preview lines
+  of about 1.2 KB in total instead of 4.2 KB of full text; `zeige` then
+  fetches the entries you pick, about 6,000 characters per call unless
+  you ask for everything. The worst case is known before you ask.
+- **It learns from its own failures** — when a search is followed by
+  fetching an entry, that pair is remembered. Ask the same thing again and
+  the entry that answered last time comes first. Word-for-word repeats
+  only, and the header says when it fired.
 - **Two filing axes** — a free-text project tag and a closed, enforced
   vocabulary of knowledge kinds. Chronicle entries are hidden from search
   by default, but the header always says how many were held back.
-- **Preview instead of full text** — a hit costs about 1.2 KB, not 4.2 KB.
-  The worst case is capped and therefore calculable.
 - **Duplicate and contradiction hints** — `remember` reports similar
   existing entries and which numbers changed, so you can supersede
   instead of accumulate.
@@ -49,10 +55,12 @@ contradictions surface instead of quietly piling up.
   with a plausible-looking list of the wrong entries.
 - **Opt-in second opinion** — optionally ask any OpenAI-compatible model
   whether two entries contradict each other or just supersede one another.
-- **It learns from its own failures** — when a search is followed by
-  fetching an entry, that pair is remembered. Ask the same thing again and
-  the entry that answered last time comes first. Word-for-word repeats
-  only, and the header says when it fired.
+- **German by default, English on request** — tool names, messages and
+  kinds are German; `MEMORY_LANG=en` switches all of it. The search also
+  matches inflected forms and compound parts ("Rangliste" finds
+  "Ranglisten"). Measured, that rarely changes the answer: the plain
+  any-term stage of the search already finds what the stems would add
+  ([details](docs/MEASUREMENTS.md#the-cascade-against-plain-or)).
 
 ## Requirements
 
