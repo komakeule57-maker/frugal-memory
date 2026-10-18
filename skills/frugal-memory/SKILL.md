@@ -1,11 +1,11 @@
 ---
-name: mcp-memory
-description: How to work with the mcp-memory server (tools recall, zeige, themen, remember, vergessen, einordnen, verdichten, pruefe — in English mode show, topics, forget, classify, consolidate, check). Use it whenever these tools are available and the question touches past work — earlier projects, decisions, pitfalls, measurements, how the user likes to work — before searching files for it, and whenever something worth keeping comes up that the next session should know.
+name: frugal-memory
+description: How to work with the frugal-memory server (tools recall, zeige, themen, remember, vergessen, einordnen, verdichten, pruefe — in English mode show, topics, forget, classify, consolidate, check). Use it whenever these tools are available and the question touches past work — earlier projects, decisions, pitfalls, measurements, how the user likes to work — before searching files for it, and whenever something worth keeping comes up that the next session should know.
 ---
 
-# Working with mcp-memory
+# Working with frugal-memory
 
-mcp-memory is a ranked full-text index over short entries in one SQLite
+frugal-memory is a ranked full-text index over short entries in one SQLite
 file. It is not a semantic search: it matches words (with German
 inflection and compound splitting), never meaning. Most rules below follow
 from that.

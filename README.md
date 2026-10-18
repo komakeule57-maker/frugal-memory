@@ -1,4 +1,4 @@
-# mcp-memory
+# frugal-memory
 
 A persistent memory for AI assistants that is just a SQLite file — and
 costs about a fifth of what reading markdown notes does.
@@ -76,8 +76,8 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 
 claude mcp add memory -s user -- \
-    /path/to/mcp-memory/.venv/bin/python \
-    /path/to/mcp-memory/memory_server.py
+    /path/to/frugal-memory/.venv/bin/python \
+    /path/to/frugal-memory/memory_server.py
 ```
 
 `-s user` makes the server available in all projects; the entry ends up in
@@ -92,8 +92,8 @@ instead:
 {
   "mcpServers": {
     "memory": {
-      "command": "/path/to/mcp-memory/.venv/bin/python",
-      "args": ["/path/to/mcp-memory/memory_server.py"]
+      "command": "/path/to/frugal-memory/.venv/bin/python",
+      "args": ["/path/to/frugal-memory/memory_server.py"]
     }
   }
 }
@@ -113,7 +113,7 @@ instead of accumulate, retry in the other language. Those live in a skill
 that ships with the repo:
 
 ```bash
-cp -r skills/mcp-memory ~/.claude/skills/
+cp -r skills/frugal-memory ~/.claude/skills/
 ```
 
 Claude Code loads its full text only when the memory comes up; until then
@@ -127,8 +127,8 @@ runs on B, next to its file; the database itself never crosses the network:
 
 ```
 claude mcp add memory-b -s project -- \
-    ssh b /path/to/mcp-memory/.venv/bin/python \
-          /path/to/mcp-memory/memory_server.py --gast
+    ssh b /path/to/frugal-memory/.venv/bin/python \
+          /path/to/frugal-memory/memory_server.py --gast
 ```
 
 `--gast` (guest) means three things:
@@ -261,7 +261,7 @@ script and the measurement reports. The English stemmer is new and has
 | `pruefpaare_gebaut.json` | the hand-built and hand-found contradiction pairs |
 | `import_memos.py` | import a file-based memory *(one-off; see docs/IMPORT.md)* |
 | `test_memory.py` | regression net, one case per pitfall (no pytest) |
-| `skills/mcp-memory/SKILL.md` | working rules for the agent, as a Claude Code skill |
+| `skills/frugal-memory/SKILL.md` | working rules for the agent, as a Claude Code skill |
 | `requirements.txt` | just `mcp` |
 | `memory.db` | the database — created on first use, never committed |
 

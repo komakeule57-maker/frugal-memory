@@ -511,7 +511,7 @@ measured at all.
   caller. Term search never finds an English-written memo via a German
   question. That needs meaning instead of word overlap, and FTS5 doesn't
   have that. The rule therefore lives with the caller — in the context
-  file or the shipped [skill](../skills/mcp-memory/SKILL.md) — instead of
+  file or the shipped [skill](../skills/frugal-memory/SKILL.md) — instead of
   the code: **if the German phrasing turns up nothing, ask the same question
   with English terms — and vice versa.** In both directions, the gap is
   mirror-symmetric.
@@ -534,7 +534,7 @@ measured at all.
 - **Has to be invoked.** An always-loaded context file sits there
   passively; this tool doesn't, and a search that is never called finds
   nothing. Hence the pointer in the context file ("you reach your memory
-  via `recall`") and the [skill](../skills/mcp-memory/SKILL.md) with the
+  via `recall`") and the [skill](../skills/frugal-memory/SKILL.md) with the
   working rules. The skill is itself loaded on demand; whether an agent
   picks it up without being told has not been measured.
 - ~~`remember` loads the split dictionary from the index on every call; at
