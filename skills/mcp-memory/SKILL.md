@@ -1,6 +1,6 @@
 ---
 name: mcp-memory
-description: How to work with the mcp-memory server (tools recall, zeige, themen, remember, vergessen, einordnen, verdichten, pruefe). Use it whenever these tools are available and the question touches past work — earlier projects, decisions, pitfalls, measurements, how the user likes to work — before searching files for it, and whenever something worth keeping comes up that the next session should know.
+description: How to work with the mcp-memory server (tools recall, zeige, themen, remember, vergessen, einordnen, verdichten, pruefe — in English mode show, topics, forget, classify, consolidate, check). Use it whenever these tools are available and the question touches past work — earlier projects, decisions, pitfalls, measurements, how the user likes to work — before searching files for it, and whenever something worth keeping comes up that the next session should know.
 ---
 
 # Working with mcp-memory
@@ -10,10 +10,14 @@ file. It is not a semantic search: it matches words (with German
 inflection and compound splitting), never meaning. Most rules below follow
 from that.
 
-Every string the server returns is German. The words you need:
+By default every name and message is German. The words you need:
 `Treffer` = hits, `Vorschau` = preview, `zurueckgehalten` = held back,
 `veraltet` = outdated, `Marke` = tag, `Art` = kind, `Aehnliche Eintraege`
-= similar entries.
+= similar entries. If the server runs with `MEMORY_LANG=en`, the same
+tools are called `show`, `topics`, `forget`, `classify`, `consolidate`,
+`check`, the parameters `kind=`, `tag=`, `supersedes=`, `full=`, and the
+kinds `interface`, `pitfall`, `decision`, `measurement`, `workflow`,
+`history`. This skill uses the German names; the rules are the same.
 
 ## Reading: recall → zeige
 
@@ -22,9 +26,15 @@ Every string the server returns is German. The words you need:
    date, title line. Set `marke=` as soon as the project is known, and
    still keep the project name in the query. Leave it unset for
    cross-cutting topics (ways of working, machine-wide pitfalls).
-3. Read the interesting hits in full with `zeige("376,481")`. Use
-   `voll=True` only when the question is narrow enough that one or two
-   hits will answer it.
+   `marke=` is a hard filter: nothing outside the project appears. When
+   a better match lies outside, a last line says so ("Ausserhalb von …
+   passt besser: #812 …") — follow it with `zeige("812")` or ask again
+   without `marke=`.
+3. Read the interesting hits in full with `zeige("376,481")`, the one you
+   want most first: a call returns about 6,000 characters, and what
+   doesn't fit comes back as title lines with the call that fetches it.
+   `recall(..., voll=True)` gives full text right away; use it only when
+   the question is narrow enough that one or two hits will answer it.
 4. **Nothing useful? Ask again in the other language.** An entry written
    in English cannot be found with a German query and vice versa. If the
    German wording fails, retry with English terms, and the other way
@@ -32,9 +42,10 @@ Every string the server returns is German. The words you need:
    (phrase → all terms → any term → stem/word part); translating is the
    one step it cannot do.
 5. **Don't know what to search for?** `themen()` lists all tags with size
-   and kind mix; `themen("<project>")` lists that project's title lines
-   grouped by kind. Browse first, then `zeige`. This is also faster when
-   an entry has a number or code name ("Deck 5", "Reihe VK").
+   and kind mix; `themen("<project>")` shows that project's 30 newest
+   title lines — the answer to "what happened here lately". Browse, then
+   `zeige`. For anything older, `recall(query, marke="<project>")` is the
+   way, not paging; `alle=True` returns the whole index grouped by kind.
 
 Things the preview tells you that are easy to miss:
 

@@ -176,7 +176,6 @@ installation, not a benchmark:
   ranking fix — found by measuring where real search sessions had failed,
   not by guessing. On today's dataset the same fix also *costs* 3 of the 117
   questions that already worked, so the net is +2 of 164.
-
 - **93 % of the dataset belongs to a project** (1,777 of 1,907 entries),
   and that is how the tool is used. Search itself does not care: general
   knowledge is found as well as project knowledge (92 % vs. 96 %, a tie
@@ -192,25 +191,9 @@ installation, not a benchmark:
   cap cost not one answer.
 
 Where a measurement did not survive a larger sample, it says so:
-[docs/MEASUREMENTS.md](docs/MEASUREMENTS.md), and the raw reports in
-[`messung/`](messung/). The ranking figure above is the clearest case: it
-read **64 % → 77 %** until 2026-09-21. Two things were wrong with it, and
-they are wrong in different ways.
-
-The **numbers** were too high because the hit count scanned the output for
-any `#id`, which also catches the `[[#1234]]` cross-references *inside*
-another hit's title line. That was a counting bug and it was there from the
-first run; on the original dataset, counted strictly, the pair is
-49 % → 68 %.
-
-The **claim that the fix was free** was true when it was written and is not
-true any more. Re-run against the 2026-09-15 snapshot, the fix *gains* 3 of
-the 117 questions that already worked; against today's, 29 % more entries
-later, it *loses* 3. Net over both sets: +12 of 164 then, +2 of 164 now. More
-entries mean more competition for the same eight slots, and this fix spends
-part of that budget on morphological variants — so its value shrinks as the
-dataset grows. The direction still holds; the margin is thinner than
-published, and getting thinner.
+[docs/MEASUREMENTS.md](docs/MEASUREMENTS.md), with the raw reports in
+[`messung/`](messung/). The ranking figure above was corrected twice —
+see [The Ranking Fix, Corrected Twice](docs/MEASUREMENTS.md#the-ranking-fix-corrected-twice).
 
 ## Documentation
 

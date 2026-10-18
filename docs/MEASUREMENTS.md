@@ -361,6 +361,29 @@ one line pointing at another project's entry, not a wrong answer. And how
 often a project session actually asks for general knowledge was not
 measured at all.
 
+### The Ranking Fix, Corrected Twice
+
+A one-line ranking fix, found by measuring where real search sessions had
+failed, raises the hit rate on 47 real reformulation chains from
+**53 % to 64 %**. Until 2026-09-21 the README gave **64 % → 77 %**. Two
+things were wrong with that figure, and they are wrong in different ways
+([ERGEBNIS-2026-09-25.md](../messung/ERGEBNIS-2026-09-25.md)).
+
+The **numbers** were too high because the hit count scanned the output for
+any `#id`, which also catches the `[[#1234]]` cross-references *inside*
+another hit's title line. That was a counting bug and it was there from the
+first run; on the original dataset, counted strictly, the pair is
+49 % → 68 %.
+
+The **claim that the fix was free** was true when it was written and is not
+true any more. Re-run against the 2026-09-15 snapshot, the fix *gains* 3 of
+the 117 questions that already worked; against today's, 29 % more entries
+later, it *loses* 3. Net over both sets: +12 of 164 then, +2 of 164 now. More
+entries mean more competition for the same eight slots, and this fix spends
+part of that budget on morphological variants — so its value shrinks as the
+dataset grows. The direction still holds; the margin is thinner than
+published, and getting thinner.
+
 ## Limitations
 
 - **`grep` beats it at compounds** (57/60 vs. 31/60). That's not a defect,
