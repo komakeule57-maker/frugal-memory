@@ -35,3 +35,6 @@ zg.py
 migration_art.py
 migration_marken.py
 migration_zeitstempel.py
+build/
+dist/
+*.egg-info/

@@ -26,7 +26,24 @@ try:
 except Exception:  # pragma: no cover - Notausgang, kein Normalfall
     faktencheck = None
 
-DB_PATH = Path(__file__).resolve().parent / "memory.db"
+def _db_pfad(hier: Path | None = None) -> Path:
+    """Wo die Datenbank liegt. MEMORY_DB geht vor.
+
+    Sonst neben dem Skript, wie seit jeher fuer eine Arbeitskopie des Repos -
+    ausser der Server ist per pip installiert: dann laege sie im Paketordner
+    und waere mit dem naechsten Update weg. Fuer diesen Fall das
+    Datenverzeichnis des Nutzers (XDG_DATA_HOME, sonst ~/.local/share).
+    """
+    if os.environ.get("MEMORY_DB"):
+        return Path(os.environ["MEMORY_DB"]).expanduser()
+    hier = hier or Path(__file__).resolve().parent
+    if hier.name in ("site-packages", "dist-packages"):
+        basis = os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share"
+        return Path(basis) / "frugal-memory" / "memory.db"
+    return hier / "memory.db"
+
+
+DB_PATH = _db_pfad()
 
 # Wie dieses Gedaechtnis heisst. Auf mehreren Rechnern liegen mehrere
 # Gedaechtnisse, und jedes zaehlt seine Eintraege von 1 an: `#72` hier ist ein
@@ -266,6 +283,7 @@ def _connect() -> sqlite3.Connection:
     """
     if GAST:
         return _connect_lesend()
+    Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)   # erster Start nach pip install
     conn = sqlite3.connect(DB_PATH, timeout=SPERRFRIST)
     conn.execute("PRAGMA journal_mode = WAL")
     # Gilt JE VERBINDUNG und ist in SQLite per Vorgabe aus - ohne diese Zeile
@@ -2630,7 +2648,12 @@ if _en():
     _englisch_einrichten()
 _schema_entrumpeln()
 
-if __name__ == "__main__":
+def main() -> None:
+    """Startpunkt, auch fuer den Befehl `frugal-memory` aus dem Paket."""
     if "--gast" in sys.argv[1:]:
         _gast_einrichten()
     server.run(transport="stdio")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "frugal-memory"
+version = "0.1.0"
+description = "A memory for AI assistants that is just a SQLite file: full-text search over MCP, no vector store, no embeddings, no external service."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Sebastian Woratsch" }]
+dependencies = ["mcp>=2.2.0"]
+keywords = ["mcp", "memory", "sqlite", "fts5", "claude", "agent", "full-text-search"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Natural Language :: German",
+    "Natural Language :: English",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Database",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+Homepage = "https://github.com/komakeule57-maker/frugal-memory"
+Measurements = "https://github.com/komakeule57-maker/frugal-memory/blob/main/docs/MEASUREMENTS.md"
+Issues = "https://github.com/komakeule57-maker/frugal-memory/issues"
+
+[project.scripts]
+frugal-memory = "memory_server:main"
+frugal-memory-nachziehen = "nachziehen:main"
+
+[tool.setuptools]
+py-modules = ["memory_server", "morphologie", "texte_en", "werkzeuge_en", "faktencheck", "nachziehen"]

@@ -1522,6 +1522,25 @@ def test_en_server_startet_als_skript():
         assert "Traceback" not in lauf.stderr, lauf.stderr[-600:]
 
 
+def test_db_pfad_arbeitskopie_paket_und_vorgabe():
+    """Arbeitskopie: neben dem Skript wie bisher. Per pip installiert: nicht im
+    Paketordner, der beim Update verschwindet. MEMORY_DB geht beidem vor."""
+    alt = {k: os.environ.pop(k, None) for k in ("MEMORY_DB", "XDG_DATA_HOME")}
+    try:
+        repo = Path("/irgendwo/frugal-memory")
+        assert ms._db_pfad(repo) == repo / "memory.db"
+        paket = Path("/venv/lib/python3.14/site-packages")
+        os.environ["XDG_DATA_HOME"] = "/daten"
+        assert ms._db_pfad(paket) == Path("/daten/frugal-memory/memory.db")
+        os.environ["MEMORY_DB"] = "/woanders/g.db"
+        assert ms._db_pfad(paket) == ms._db_pfad(repo) == Path("/woanders/g.db")
+    finally:
+        for k, v in alt.items():
+            os.environ.pop(k, None)
+            if v is not None:
+                os.environ[k] = v
+
+
 def main() -> int:
     faelle = [(n, f) for n, f in sorted(globals().items())
               if n.startswith("test_") and callable(f)]

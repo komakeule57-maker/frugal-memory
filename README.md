@@ -60,7 +60,7 @@ contradictions surface instead of quietly piling up.
   matches inflected forms and compound parts ("Rangliste" finds
   "Ranglisten"). Measured, that rarely changes the answer: the plain
   any-term stage of the search already finds what the stems would add
-  ([details](docs/MEASUREMENTS.md#the-cascade-against-plain-or)).
+  ([details](https://github.com/komakeule57-maker/frugal-memory/blob/main/docs/MEASUREMENTS.md#the-cascade-against-plain-or)).
 
 ## Requirements
 
@@ -71,6 +71,21 @@ contradictions surface instead of quietly piling up.
 
 ## Setup
 
+From PyPI, as a command in its own environment:
+
+```bash
+pipx install frugal-memory        # or: uv tool install frugal-memory
+
+claude mcp add memory -s user -- frugal-memory
+```
+
+The database is created on first use at
+`~/.local/share/frugal-memory/memory.db` (`$XDG_DATA_HOME` if set).
+`frugal-memory-nachziehen` is the upkeep script described in
+[DESIGN.md](https://github.com/komakeule57-maker/frugal-memory/blob/main/docs/DESIGN.md).
+
+Or from a checkout of this repository:
+
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
@@ -79,6 +94,9 @@ claude mcp add memory -s user -- \
     /path/to/frugal-memory/.venv/bin/python \
     /path/to/frugal-memory/memory_server.py
 ```
+
+Here the database is created as `memory.db` next to the script. Either way,
+`MEMORY_DB=/some/path.db` puts it somewhere else.
 
 `-s user` makes the server available in all projects; the entry ends up in
 `~/.claude.json`. Restart Claude Code afterward — MCP servers are only
@@ -99,8 +117,6 @@ instead:
 }
 ```
 
-The database is created on first use as `memory.db` next to the script.
-
 **One rule matters more than any setting: one fact per call, not one
 document.** `recall` returns whole entries — store a 180 KB file as a
 single entry and you get it back as a single hit, having gained nothing.
@@ -110,7 +126,7 @@ single entry and you get it back as a single hit, having gained nothing.
 The tools alone don't tell an agent the working rules: search before
 reading files, `recall` → `zeige`, exactly one kind per entry, supersede
 instead of accumulate, retry in the other language. Those live in a skill
-that ships with the repo:
+that ships with the repo (not with the PyPI package):
 
 ```bash
 cp -r skills/frugal-memory ~/.claude/skills/
@@ -160,7 +176,7 @@ not need them. The tools are then called `mcp__memory-b__recall` and so on.
 | `verdichten(marke, art, …)` | find groups of entries that say much the same thing |
 | `pruefe(ids)` | opt-in: have a language model judge contradiction vs. newer state |
 
-Full reference with parameters and behavior: [docs/TOOLS.md](docs/TOOLS.md).
+Full reference with parameters and behavior: [docs/TOOLS.md](https://github.com/komakeule57-maker/frugal-memory/blob/main/docs/TOOLS.md).
 With `MEMORY_LANG=en` the same tools come with English names and parameters,
 see [A Note on Language](#a-note-on-language).
 
@@ -200,20 +216,20 @@ the way — evidence from one installation, not a benchmark:
   cap cost not one answer.
 
 Where a measurement did not survive a larger sample, it says so:
-[docs/MEASUREMENTS.md](docs/MEASUREMENTS.md), with the raw reports in
-[`messung/`](messung/). The ranking figure above was corrected twice —
-see [The Ranking Fix, Corrected Twice](docs/MEASUREMENTS.md#the-ranking-fix-corrected-twice).
+[docs/MEASUREMENTS.md](https://github.com/komakeule57-maker/frugal-memory/blob/main/docs/MEASUREMENTS.md), with the raw reports in
+[`messung/`](https://github.com/komakeule57-maker/frugal-memory/tree/main/messung/). The ranking figure above was corrected twice —
+see [The Ranking Fix, Corrected Twice](https://github.com/komakeule57-maker/frugal-memory/blob/main/docs/MEASUREMENTS.md#the-ranking-fix-corrected-twice).
 
 ## Documentation
 
 | | |
 |---|---|
-| [docs/TOOLS.md](docs/TOOLS.md) | all eight tools in detail |
-| [docs/DESIGN.md](docs/DESIGN.md) | the two axes, the morphology, the database schema, and what was left out on purpose |
-| [docs/MEASUREMENTS.md](docs/MEASUREMENTS.md) | what was measured, and the known limitations |
-| [docs/FACTCHECK.md](docs/FACTCHECK.md) | the opt-in fact check: setup, what it can and cannot do |
-| [docs/IMPORT.md](docs/IMPORT.md) | importing an existing folder of notes, and the damage that did |
-| [`messung/`](messung/) | the eight underlying measurement reports (mostly German) |
+| [docs/TOOLS.md](https://github.com/komakeule57-maker/frugal-memory/blob/main/docs/TOOLS.md) | all eight tools in detail |
+| [docs/DESIGN.md](https://github.com/komakeule57-maker/frugal-memory/blob/main/docs/DESIGN.md) | the two axes, the morphology, the database schema, and what was left out on purpose |
+| [docs/MEASUREMENTS.md](https://github.com/komakeule57-maker/frugal-memory/blob/main/docs/MEASUREMENTS.md) | what was measured, and the known limitations |
+| [docs/FACTCHECK.md](https://github.com/komakeule57-maker/frugal-memory/blob/main/docs/FACTCHECK.md) | the opt-in fact check: setup, what it can and cannot do |
+| [docs/IMPORT.md](https://github.com/komakeule57-maker/frugal-memory/blob/main/docs/IMPORT.md) | importing an existing folder of notes, and the damage that did |
+| [`messung/`](https://github.com/komakeule57-maker/frugal-memory/tree/main/messung/) | the eight underlying measurement reports (mostly German) |
 
 ## A Note on Language
 
@@ -272,4 +288,4 @@ real working sessions.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](https://github.com/komakeule57-maker/frugal-memory/blob/main/LICENSE).
