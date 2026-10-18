@@ -275,8 +275,10 @@ says the gap rarely bites: a median query carries five terms, and the
 others usually find the entry anyway.
 
 Opening a schema-5 database rebuilds it once (7.8 s on 2,141 entries, file
-size unchanged). A guest connection opens read-only and does not migrate,
-so both machines of a guest pair have to be updated together.
+size unchanged). A guest connection opens read-only and does not migrate:
+after an update, guests are turned away until a regular session on that
+machine has opened the database once. Server processes still running the
+old code have to be restarted — they would set the schema version back.
 
 ### The Cascade Against Plain OR
 
