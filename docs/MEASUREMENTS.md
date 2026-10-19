@@ -162,8 +162,26 @@ them, MemPalace with `embeddinggemma` reached only 65.7 % and the gap looked
 significant (p = 0.041). Without them it is 69.1 % and not significant. The
 table shows the variant that is better for MemPalace.
 
-Not measured: answer quality, and the tokens a result costs. MemPalace
-returns full text, this server a preview.
+**Tokens per answer**, measured 2026-10-19 on the same benches against
+MemPalace with `embeddinggemma`: what the search tool hands back to the
+client, counted in real tokens (calibrated against the running session,
+two samples per cell, spread at most 4 %). MemPalace's search already
+carries the text; this server needs `recall` and then `zeige` for the
+entry. Counted on the questions where both had the gold entry in their
+list:
+
+| | this server | MemPalace | factor |
+|---|---:|---:|---:|
+| LoCoMo, `recall` + `zeige` of the gold entry | 1,876 | 6,204 | 3.3 |
+| LoCoMo, `recall` + `zeige` of the first three | 2,459 | 6,204 | 2.5 |
+| German questions, `recall` + `zeige` of the gold entry | 1,477 | 4,958 | 3.4 |
+| German questions, `recall` + `zeige` of the first three | 2,830 | 4,958 | 1.8 |
+
+All differences p = 0.0001 (paired permutation test). About half of the
+gap is packaging — MemPalace's JSON carries ids, four timestamps and
+scores per hit, and the hit text is only 46–54 % of it — the other half
+is that it sends text for every hit. Not measured: answer quality, and
+an agent that searches more than once.
 
 ### Preview vs. Full Text
 
