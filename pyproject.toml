@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "frugal-memory"
-version = "0.1.0"
+dynamic = ["version"]
 description = "A memory for AI assistants that is just a SQLite file: full-text search over MCP, no vector store, no embeddings, no external service."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -35,3 +35,6 @@ frugal-memory-nachziehen = "nachziehen:main"
 
 [tool.setuptools]
 py-modules = ["memory_server", "morphologie", "texte_en", "werkzeuge_en", "faktencheck", "nachziehen"]
+
+[tool.setuptools.dynamic]
+version = { attr = "memory_server.__version__" }

@@ -231,7 +231,11 @@ def _veraltet_vermerk(grund: str, durch) -> str:
 # Deshalb wird an beiden getrennt, statt sich auf einen zu verlassen.
 _TRENNER = re.compile(r"[\s,]+")
 
-server = MCPServer("memory")
+# Die einzige Stelle mit der Versionsnummer: pyproject.toml liest sie von hier,
+# und der Server meldet sie jedem Client beim Verbinden (serverInfo).
+__version__ = "0.1.1"
+
+server = MCPServer("memory", version=__version__)
 
 
 def _marken(tags: str) -> list:
