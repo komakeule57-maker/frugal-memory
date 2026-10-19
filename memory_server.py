@@ -233,7 +233,7 @@ _TRENNER = re.compile(r"[\s,]+")
 
 # Die einzige Stelle mit der Versionsnummer: pyproject.toml liest sie von hier,
 # und der Server meldet sie jedem Client beim Verbinden (serverInfo).
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 server = MCPServer("memory", version=__version__)
 

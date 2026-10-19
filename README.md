@@ -1,5 +1,7 @@
 # frugal-memory
 
+<!-- mcp-name: io.github.komakeule57-maker/frugal-memory -->
+
 A persistent memory for AI assistants that is just a SQLite file — and
 costs about a fifth of what reading markdown notes does.
 
