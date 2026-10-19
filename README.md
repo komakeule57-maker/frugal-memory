@@ -189,9 +189,9 @@ the way — evidence from one installation, not a benchmark:
   real questions (2,359 vs. 11,319 per question). The gap grows with the
   dataset and with file size, because reading a file is all-or-nothing:
   one question against a 188 KB project file costs 94,152 tokens.
-- **82.3 % Recall@10** against the public LoCoMo dataset with a session as
-  the unit, **45.1 %** with a single dialogue turn — untuned, first run, at
-  2 ms and 2.7 KB per query.
+- **89.8 % Recall@10** against the public LoCoMo dataset with a session as
+  the unit, untuned (2026-10-19; the first run in September gave 82.3 %,
+  and 45.1 % with a single dialogue turn as the unit).
 - **73 % smaller returns** from the preview, with a calculable worst case.
 - **−23 % expected characters per question** from the feedback loop, at
   84 % vs. 73 % first-round hit rate, measured over 164 questions from 30

@@ -108,6 +108,63 @@ The turn figure is the stricter one. A LoCoMo conversation has 19 to 32
 sessions, so ten session hits already cover a third to half of it. The
 script and per-question results are not part of this repository.
 
+**Re-measured 2026-10-19** with the code of schema version 6, following the
+protocol of MemPalace's published `benchmarks/locomo_bench.py` (one store
+per conversation, one document per session, average recall of the evidence
+sessions within the first ten): **89.8 %** in English mode, 89.7 % in
+German mode, all 1,986 questions. Ingesting all 272 sessions and answering
+every question took 9 seconds. The turn figure was not re-measured. The
+comparison this was part of is the next section.
+
+### Against MemPalace
+
+Measured 2026-10-18/19 on one machine (12 cores, 7 GB RAM), MemPalace 3.11.0
+from PyPI in its own environment. Both systems were driven through the
+functions their MCP tools call (`tool_add_drawer`/`tool_search` for
+MemPalace, with its product defaults — hybrid ranking, 800-character
+chunks), no language model anywhere in the search path. MemPalace ran with
+two embedding models: `minilm`, its default, and `embeddinggemma`, the one
+it recommends for anything that is not English.
+
+**Control first:** MemPalace's own benchmark script gave exactly its
+published figures on this machine, 60.3 % (raw) and 88.9 % (hybrid mode,
+which lives only in that script, not in the product, and is not compared
+here). So the setup reproduces theirs.
+
+Because this compares against someone else's system, it is judged by the
+usual rule for retrieval benchmarks rather than by the stricter 10 % rule
+used elsewhere in this document: a paired significance test, p < 0.05
+(permutation test on per-question recall for LoCoMo, exact McNemar test on
+hit/miss for the German questions). The rule change was made after the
+first results were in, and is recorded with that note in the plan.
+
+| | this server | MemPalace `embeddinggemma` | MemPalace `minilm` |
+|---|---:|---:|---:|
+| LoCoMo, Recall@10 (1,986 questions) | 89.8 % | 90.3 % (p = 0.40) | 87.2 % (p = 0.0001) |
+| 178 real German questions, gold among 8 | 73.0 % | 69.1 % (p = 0.23) | 60.7 % (p = 0.0007) |
+| 50 chain first questions, gold among 8 | 54.0 % | 62.0 % (p = 0.48) | 46.0 % (p = 0.42) |
+| search, median | 1.8 ms | 131 ms | 55 ms |
+| peak memory | 81 MB | 949 MB | 412 MB |
+| ingesting 1,593 entries | 27 s | 1,269 s | 168 s |
+| on disk | 6.2 MB | 23 MB | 23 MB |
+| cold start to first result | 0.8 s | 3.4 s | 1.4 s |
+| install, including model | 52 MB | 817 MB | 662 MB |
+
+Against MemPalace with the multilingual model, retrieval is a tie on both
+benches — no difference is significant. Against its default model, this
+server finds significantly more on LoCoMo and on the German questions.
+
+Two things keep the German row honest. The questions are real `recall`
+queries whose gold answers were found with this server, which favours it;
+LoCoMo has no such tilt. And the largest free choice in the setup — whether
+the project tags go into MemPalace's text as a last line — mattered: with
+them, MemPalace with `embeddinggemma` reached only 65.7 % and the gap looked
+significant (p = 0.041). Without them it is 69.1 % and not significant. The
+table shows the variant that is better for MemPalace.
+
+Not measured: answer quality, and the tokens a result costs. MemPalace
+returns full text, this server a preview.
+
 ### Preview vs. Full Text
 
 14 realistic questions against 984 entries, 5 runs each after warm-up:
