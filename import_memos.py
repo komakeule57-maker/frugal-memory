@@ -25,7 +25,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import memory_server as ms
-from morphologie import stamm_spalte, teile_spalte
 
 # Claude Code legt sein Datei-Gedaechtnis unter ~/.claude/projects/<projekt>/memory
 # ab, wobei <projekt> der Arbeitsordner mit Schraegstrichen als Bindestrich ist.
@@ -167,20 +166,23 @@ def main() -> int:
                     if trocken:
                         neu += 1
                         continue
-                    volltext = f"{absatz} {marke}"
+                    # Dieselben Wege wie `remember`: Ableitungen in der
+                    # Schreibweise des Index, Marken- und Woerterverzeichnis
+                    # mitfuehren. Bis 2026-10-19 rechnete der Import selbst
+                    # und liess die Umschrift-Faltung und beide Verzeichnisse aus.
+                    stems, teile = ms._ableitungen(conn, absatz, marke)
                     conn.execute(
                         "INSERT INTO eintrag (content, tags, ts, stems, teile)"
                         " VALUES (?,?,?,?,?)",
-                        (
-                            absatz,
-                            marke,
-                            ts,
-                            stamm_spalte(volltext),
-                            teile_spalte(volltext, ms._vokabular(conn, volltext)),
-                        ),
+                        (absatz, marke, ts, stems, teile),
                     )
+                    ms._marken_eintragen(conn, marke)
+                    ms._vokabel_eintragen(conn, f"{absatz} {marke}")
                     neu += 1
         if not trocken:
+            # Zerschnittene Memos gleich als Kette vermerken, sonst erst beim
+            # naechsten nachziehen.py.
+            ms._ketten_nachtragen(conn)
             conn.commit()
         gesamt = conn.execute("SELECT count(*) FROM eintrag").fetchone()[0]
     finally:

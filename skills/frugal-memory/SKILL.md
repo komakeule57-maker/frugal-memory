@@ -15,9 +15,9 @@ By default every name and message is German. The words you need:
 `veraltet` = outdated, `Marke` = tag, `Art` = kind, `Aehnliche Eintraege`
 = similar entries. If the server runs with `MEMORY_LANG=en`, the same
 tools are called `show`, `topics`, `forget`, `classify`, `consolidate`,
-`check`, the parameters `kind=`, `tag=`, `supersedes=`, `full=`, and the
-kinds `interface`, `pitfall`, `decision`, `measurement`, `workflow`,
-`history`. This skill uses the German names; the rules are the same.
+`check`, the parameters `kind=`, `tag=`, `supersedes=`, `full=`,
+`include_superseded=`, and the kinds `interface`, `pitfall`, `decision`,
+`measurement`, `workflow`, `history`, `unsorted`. This skill uses the German names; the rules are the same.
 
 ## Reading: recall → zeige
 
@@ -52,8 +52,9 @@ Things the preview tells you that are easy to miss:
 - **Chronicle is hidden by default.** If the header says entries were held
   back and the hits are weak, repeat with `art="verlauf"` (or
   `art="alle"`).
-- **"[Stueck 2 von 4, zerschnittenes Memo #872-#875]"** marks a fragment
-  of a longer text. The context is not in that entry — read the whole
+- **"[Stueck 2 von 4 von "…", zerschnittenes Memo #872-#875]"** marks a
+  fragment of a longer text (piece 1 carries the note without the quoted
+  subject). The context is not in that entry — read the whole
   chain with `zeige("872,873,874,875")` before concluding anything.
 - **Superseded entries are hidden** too. `mit_veraltet=True` brings them
   back; `zeige` always shows them, with the reason they were retired.
@@ -113,7 +114,7 @@ written, not when the thing happened.
   (typically old and new state side by side). It does not merge anything;
   write one new entry and supersede the group via `ersetzt=`.
 - `pruefe(ids)` — only if the user has set up a fact-check model
-  (`MEMORY_FC_URL`). A small model judges whether entries contradict each
+  (`MEMORY_FC_URL` and `MEMORY_FC_MODELL`). A small model judges whether entries contradict each
   other (`WIDERSPRUCH`), supersede each other (`FORTSCHRITT`) or are
   unrelated (`UNABHAENGIG`); `uneinig` means it gave different answers
   for the two directions. **Not binding** — it says where to look, not
@@ -136,5 +137,6 @@ New knowledge always goes into your own memory.
 - Don't treat "no hits" as "never happened" before trying the other
   language, `themen()` and `art="verlauf"`.
 - Don't edit `memory.db` by hand. If it happened anyway, run
-  `.venv/bin/python nachziehen.py` in the server folder afterward, or the
-  edited entries stop being found by inflection and compounds.
+  `frugal-memory-nachziehen` afterward (from a checkout:
+  `.venv/bin/python nachziehen.py` in the server folder), or the edited
+  entries stop being found by inflection and compounds.

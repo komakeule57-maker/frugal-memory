@@ -21,12 +21,12 @@ Hence a second axis. The **tag** (`marke`) says WHERE (the project), the
 | `messwert` (measurement) | a number plus its measurement criterion |
 | `arbeitsweise` (way of working) | how to work with this user |
 | `verlauf` (chronicle) | chronicle: what was built when |
-| `gemischt` (mixed) | not yet classified (no row in the side table) |
+| `gemischt` (mixed) | not yet classified (the column default) |
 
 Three design decisions behind this:
 
-**The vocabulary is closed and enforced via `CHECK`**, not by convention in
-a free-text field. A free field decays within weeks into `fallstrick`,
+**The vocabulary is closed and enforced by the database** (a foreign key
+on `art_vokabular`, see below), not by convention in a free-text field. A free field decays within weeks into `fallstrick`,
 `fallstricke`, and `pitfall`, and after that nothing filters anymore.
 
 **`verlauf` (chronicle) is excluded from `recall`'s default view.** The
@@ -41,15 +41,18 @@ sitting in the chronicle.
 it puts pressure, at write time, to separate the chronicle paragraph from
 the knowledge paragraph. If a text belongs to two kinds, it's two entries.
 
-**No row in the side table means `gemischt` (mixed).** This meant the
-migration needed no backfill across 984 rows, and the backlog stays
-visible instead of hiding as a silent default.
+**Unclassified means `gemischt` (mixed).** When kinds were introduced they
+lived in a side table, and a missing row meant `gemischt`, so the
+migration needed no backfill across 984 rows. Since schema version 5 the
+kind is a column of the entry with `gemischt` as its default — the backlog
+stays visible as a value of its own instead of hiding behind a guess.
 
 ### The Tag Is a Free-Text Field — With Consequences
 
-What's forbidden for the kind via `CHECK` is allowed for the tag, and the
+What the database forbids for the kind is allowed for the tag, and the
 data demonstrated it. Cleaned up on 2026-09-15, 176 → 166 tags
-(`migration_marken.py`, 86 entries):
+(`migration_marken.py`, an internal one-off script not included in this
+repository, 86 entries):
 
 - **Two separators side by side** — `spiel3d-test Nachtfrost` and
   `spiel3d-test,Nachtfrost`. Unified to spaces. The space separator had
@@ -79,10 +82,10 @@ database keeps a **directory of assigned tags** (`marken`), and `remember`
 checks every new tag against it:
 
 ```
-Gespeichert #1429 als messwert (Tags: mcp-memory)
+Gespeichert #1429 [2026-09-15 10:12:03] als messwert (Tags: mcp-memory)
 Neue Marke 'mcp-memory' - dem Bestand schon bekannt ist: mcp-memory-server. Dieselbe Sache?
 
-Gespeichert #1431 als messwert (Tags: fallstrick)
+Gespeichert #1431 [2026-09-15 10:13:41] als messwert (Tags: fallstrick)
 Marke 'fallstrick' ist ein Art-Wort. Die Marke sagt WO, die Art WELCHE SORTE - dafuer ist art= da.
 ```
 
@@ -151,8 +154,9 @@ because of this: `bildschirmflaeche` (with "ae" as an umlaut spelling)
 didn't split, because `flaeche` was only in the dictionary without
 diacritics.
 
-Both get written into two extra FTS5 columns (`stems`, `teile`) on save
-and mirrored during search.
+Both are stored in two columns of the entry (`stems`, `teile`), computed on
+save; the triggers copy them into the index, and the search uses them as
+its fourth stage.
 
 **Cold start:** splitting needs a filled memory. In a fresh database, the
 word-part search finds nothing, because the individual pieces don't occur
@@ -162,7 +166,10 @@ rebuild.
 
 ## Database
 
-`memory.db` next to the script. Since **schema version 5** (2026-09-15),
+One SQLite file: `MEMORY_DB` if set, otherwise
+`$XDG_DATA_HOME/frugal-memory/memory.db` (usually
+`~/.local/share/frugal-memory/memory.db`) for a pip install, and
+`memory.db` next to the script for a checkout. Since **schema version 5** (2026-09-15),
 `eintrag` is an **ordinary table** and `suche` is just an index over it.
 Since **schema version 6** (2026-10-18) the index reads `ncontent`/`ntags`
 instead of `content`/`tags`: the same text in one spelling (ä/ae → a,
@@ -182,17 +189,31 @@ CREATE TABLE eintrag (
   ncontent TEXT GENERATED ALWAYS AS (/* folded content */) VIRTUAL,
   ntags    TEXT GENERATED ALWAYS AS (/* folded tags */) VIRTUAL)
 
+CREATE INDEX eintrag_nach_art  ON eintrag(art)
+CREATE INDEX eintrag_nach_ts   ON eintrag(ts)
+CREATE INDEX eintrag_nach_kopf ON eintrag(kopf) WHERE kopf IS NOT NULL
+
 CREATE VIRTUAL TABLE suche USING fts5(ncontent, ntags, stems, teile,
                                       content='eintrag', content_rowid='id')
--- three triggers keep `suche` in sync with `eintrag`
+-- triggers eintrag_ai / eintrag_ad / eintrag_au keep `suche` in sync
+CREATE VIRTUAL TABLE suche_vocab USING fts5vocab(suche, col)
 
 CREATE TABLE veraltet      (vermerk INTEGER PRIMARY KEY AUTOINCREMENT,
                             id INTEGER NOT NULL, durch INTEGER, am TEXT, grund TEXT)
+CREATE INDEX veraltet_nach_id ON veraltet(id)
 CREATE TABLE art_vokabular (art TEXT PRIMARY KEY)
 CREATE TABLE marken        (marke TEXT PRIMARY KEY, seit TEXT)
 CREATE TABLE vokabel       (wort TEXT PRIMARY KEY) WITHOUT ROWID
+CREATE TABLE nachfrage     (schluessel TEXT NOT NULL,
+                            id INTEGER NOT NULL REFERENCES eintrag(id) ON DELETE CASCADE,
+                            frage TEXT NOT NULL, seit TEXT NOT NULL,
+                            PRIMARY KEY (schluessel, id)) WITHOUT ROWID
 CREATE TABLE schema        (schluessel TEXT PRIMARY KEY, wert TEXT)
 ```
+
+`nachfrage` holds the feedback loop's search→fetch pairs (see below);
+`schema` holds the version (`stand`), the spelling the index was built
+with (`einheit`) and the stemmer language (`sprache`).
 
 ### Why It Was Different Through Schema Version 4 — and What the Rebuild Brought
 
@@ -230,7 +251,7 @@ and `art_vokabular` were added), and the source code shrank by a net 52
 lines only. Whoever justifies the rebuild with space or code volume is
 justifying it wrongly.
 
-### Five Things That Are Different Than They First Appear
+### Seven Things That Are Different Than They First Appear
 
 **`ts` is not in the index.** The date is there for display, never a
 search term. As an ordinary FTS5 column, the tokenizer split it into bare
@@ -264,7 +285,8 @@ Python. After any intervention outside of `remember`, and after any
 change to `morphologie.py`, this still applies:
 
 ```bash
-.venv/bin/python nachziehen.py [--probe]
+frugal-memory-nachziehen [--probe]         # pip install
+.venv/bin/python nachziehen.py [--probe]   # checkout
 ```
 
 **No write in the connection path.** The server opens the database per
@@ -287,11 +309,16 @@ carried-along length would be derived data and would drift apart on the
 next intervention. Where the chains come from is covered under
 [What the Import Broke](IMPORT.md#what-the-import-broke).
 
-**The setup carries a version number** (`schema.stand`, currently 5).
+**The setup carries a version number** (`schema.stand`, currently 6).
 Without it, no migration would notice it's due. The move from 4 to 5 runs
 by itself on first connect (`_umzug_auf_5`), takes 128 ms, and leaves
 behind a file that's roughly twice as big until the next `VACUUM` — the
-discarded pages are still in there. **Stages before 4 are gone**: there's
+discarded pages are still in there. The move from 5 to 6 (`_index_umbauen`)
+is triggered not by the number but by `schema.einheit`, the spelling the
+index was built with: if it differs from the current one — on the way from
+5 to 6, or when the `UMSCHRIFT` switch is flipped — index and triggers are
+dropped, the generated columns recreated, `stems`/`teile` recomputed in
+the new spelling, and the index rebuilt from `eintrag`. **Stages before 4 are gone**: there's
 no longer a database that needs them. An older copy gets checked out to
 schema version 4 before the rebuild, then continues from there; the
 server states this itself, rather than silently touching it.
@@ -361,8 +388,11 @@ evidenced pairs looked like the safe start.
 The loop tolerates roughly 10 % wrong pairs and is worse than no loop at
 25 %. Three guards, in order of how much they carry:
 
-1. **Word-for-word firing.** A wrong pair can only damage the exact question
-   that produced it, not a neighbourhood of questions.
+1. **Word-for-word firing.** The key is the set of search terms — order and
+   case aside, nothing fuzzy. A wrong pair can only damage the exact
+   question that produced it, not a neighbourhood of questions. Searches
+   written in explicit FTS5 syntax, and everything in guest mode, neither
+   collect nor fire.
 2. **A shared content word** between question and entry, or nothing is
    stored. A `zeige` that merely looks something else up after a search is a
    change of subject, not an answer.

@@ -1,18 +1,35 @@
 # Importing a File-Based Memory
 
-The one-off import of an existing folder of `.md` notes, the damage it did,
-and the repairs that followed.
+Importing an existing folder of `.md` notes, the damage the import did to
+the author's own data, and the repairs that followed.
 
+The script is not part of the PyPI package; run it from a checkout of the
+repository:
 
 ```bash
 .venv/bin/python import_memos.py [folder] [--trocken] [--mit-index]
 ```
 
+From a checkout the database is `memory.db` next to the script. If the
+server itself runs from a pip install, point the import at that file:
+`MEMORY_DB=~/.local/share/frugal-memory/memory.db .venv/bin/python
+import_memos.py …`. `--trocken` (dry run) only counts.
+
 Reads a folder full of `*.md` files paragraph by paragraph, tag = file
 name, timestamp from the `modified` frontmatter (otherwise file time).
-Callable repeatedly: paragraphs already present are skipped. Paragraphs
-over 1200 characters are split at preferred break points (paragraph >
-line > sentence > semicolon > comma).
+Without a folder it tries Claude Code's memory folder for the current
+directory (`~/.claude/projects/<cwd>/memory`) and otherwise lists the
+ones it finds. Callable repeatedly: paragraphs already present are
+skipped, and so are paragraphs under 40 characters (headings, fragments).
+Paragraphs over 1200 characters are split at preferred break points
+(paragraph > line > sentence > semicolon > `, **` > comma), and as a last
+resort hard at 1200 characters.
+
+Imported entries go through the same derivations as `remember` (stems and
+word parts in the index's spelling, tag and word directories), and cut-up
+memos are marked as chains right away (see below), so nothing has to be
+run afterward. Until 2026-10-19 the import computed its own columns and
+needed a `nachziehen.py` run to match the index.
 
 `--mit-index` additionally ingests `MEMORY.md`, line by line instead of
 paragraph by paragraph, and pulls the tag from the line's reference.
@@ -36,12 +53,13 @@ subject: the entry is there but looks useless and gets passed over — the
 same failure pattern as a word the index splits differently than the
 search does.
 
-The fix is the `kette` table (schema version 4). `_ketten_nachtragen()`
-finds the cuts and records `(id, kopf, nr)`; `recall` and `zeige` append
-a note built from it:
+The fix was a `kette` table in schema version 4; since version 5 these are
+the columns `kopf` and `nr` of the entry. `_ketten_nachtragen()` finds the
+cuts and records head and position; `recall` and `zeige` append a note
+built from it, from piece 2 onward with the head's subject:
 
 ```
-#984 [verlauf] 2026-09-10 raumschiff_alpha_0-2.apk), gilt fuer den Rest…  [Stueck 2 von 3, zerschnittenes Memo #983-#985]
+#984 [verlauf] 2026-09-10 raumschiff_alpha_0-2.apk), gilt fuer den Rest… (raumschiff-project) [Stueck 2 von 3 von "<subject of #983>", zerschnittenes Memo #983-#985]
 ```
 
 **The cut is checked at both ends at once:** the predecessor breaks off
@@ -71,9 +89,11 @@ otherwise `` `applyItemsSync` lautlos verschwanden`` would slip through as
 a fragment. The tag is the second safeguard: without it, the last note of
 one project would stick to the first note of the next.
 
-This is a **one-time** repair of the legacy data, not ongoing maintenance
-— `import_memos.py` never runs again, no new fragments are created.
-Anyone who ever builds a text splitter again: check the character before
+The detection runs again with every `nachziehen.py` and at the end of
+every import, so chains stay correct when entries change. The splitter
+itself was not fixed: on the author's data the import never runs again,
+and a new import of German notes can produce the same fragments — which
+the chain note then catches. Anyone who ever builds a text splitter again: check the character before
 `". "` before treating it as a sentence end (digit or known abbreviation =
 not a sentence end).
 

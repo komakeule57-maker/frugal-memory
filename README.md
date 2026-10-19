@@ -81,6 +81,13 @@ pipx install frugal-memory        # or: uv tool install frugal-memory
 claude mcp add memory -s user -- frugal-memory
 ```
 
+With [uv](https://docs.astral.sh/uv/) it also works without installing
+first; `uvx` fetches the package on the first start:
+
+```bash
+claude mcp add memory -s user -- uvx frugal-memory
+```
+
 The database is created on first use at
 `~/.local/share/frugal-memory/memory.db` (`$XDG_DATA_HOME` if set).
 `frugal-memory-nachziehen` is the upkeep script described in
@@ -243,8 +250,8 @@ German compounds.
 **English mode:** start the server with `MEMORY_LANG=en`. Then
 
 - the tools are `remember(text, tags, kind, supersedes)`,
-  `recall(query, limit, kind, tag, full, include_superseded)`, `show(ids)`,
-  `topics(tag, limit)`, `forget(ids, reason)`, `classify(ids, kind)`,
+  `recall(query, limit, kind, tag, full, include_superseded)`, `show(ids, full)`,
+  `topics(tag, limit, page, all)`, `forget(ids, reason)`, `classify(ids, kind)`,
   `consolidate(tag, kind, threshold, groups)` and `check(ids)`,
 - the kinds are `interface`, `pitfall`, `decision`, `measurement`,
   `workflow`, `history`, `unsorted`,
@@ -257,7 +264,8 @@ German names and translated at the border, and German kind names are
 accepted in both modes. What does change is the stem index, so the file
 records the language it was built in and the server refuses to open it
 with the other one. To switch an existing memory, back it up and run
-`MEMORY_LANG=en python3 nachziehen.py` once.
+`MEMORY_LANG=en frugal-memory-nachziehen` once (from a checkout:
+`MEMORY_LANG=en python3 nachziehen.py`).
 
 Not covered by the switch: the fact-check prompt stays German (it is
 calibrated word for word, and adding one sentence once halved its
@@ -273,14 +281,16 @@ script and the measurement reports. The English stemmer is new and has
 | `morphologie.py` | stemmer and compound splitter (German; small English stemmer for `MEMORY_LANG=en`) |
 | `werkzeuge_en.py` | the English tool surface for `MEMORY_LANG=en` |
 | `texte_en.py` | English messages, keyed by the German text |
-| `nachziehen.py` | recomputes `stems`/`teile` and refreshes the tag directory |
+| `nachziehen.py` | recomputes the derived columns, the word and tag directories and the chain marks (`frugal-memory-nachziehen` after pip install) |
 | `faktencheck.py` | opt-in second opinion via any OpenAI-compatible model (off unless configured) |
 | `pruefstand_fc.py` | measures the fact check against gold labels from the dataset |
 | `pruefpaare_gebaut.json` | the hand-built and hand-found contradiction pairs |
-| `import_memos.py` | import a file-based memory *(one-off; see docs/IMPORT.md)* |
+| `import_memos.py` | import a file-based memory *(see docs/IMPORT.md)* |
 | `test_memory.py` | regression net, one case per pitfall (no pytest) |
 | `skills/frugal-memory/SKILL.md` | working rules for the agent, as a Claude Code skill |
-| `requirements.txt` | just `mcp` |
+| `requirements.txt` | just `mcp>=2.2.0` |
+| `pyproject.toml` | package definition for PyPI (`frugal-memory`) |
+| `server.json` | entry in the official MCP registry |
 | `memory.db` | the database — created on first use, never committed |
 
 `messung/` keeps the eight measurement **reports**. The scripts that

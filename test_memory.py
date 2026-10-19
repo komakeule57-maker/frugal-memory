@@ -879,6 +879,40 @@ def test_import_schreibt_in_den_speicher_von_stand_5():
     conn.close()
 
 
+def test_import_rechnet_wie_remember():
+    """Der Import rechnete `stems`/`teile` selbst - ohne die Umschrift-Faltung
+    von Stand 6 und ohne Marken- und Woerterverzeichnis. Importierte Eintraege
+    lagen damit neben dem Index, bis jemand nachziehen.py laufen liess; fuer
+    einen neuen Nutzer ist der Import aber der erste Befehl. Prueft: nach dem
+    Import findet `_nachziehen` nichts mehr zu tun, die Marke steht im
+    Verzeichnis, und ein zerschnittenes Memo ist schon als Kette vermerkt.
+    """
+    ordner = ms.DB_PATH.parent / "memos2"
+    ordner.mkdir()
+    (ordner / "gaertnerei.md").write_text(
+        "---\nmodified: 2026-01-02\n---\n\n"
+        "Die Gärtnerei liefert die Pflanzkübel erst nach dem Frost, also Mitte März\n\n"
+        "und nicht vorher, weil die Übergabe sonst über den Hof laufen muesste.\n"
+    )
+    alt = sys.argv
+    sys.argv = ["import_memos.py", str(ordner)]
+    try:
+        assert im.main() == 0
+    finally:
+        sys.argv = alt
+    conn = ms._connect()
+    try:
+        assert ms._nachziehen(conn) == [], "Import und remember rechnen verschieden"
+        marken = {r[0] for r in conn.execute("SELECT marke FROM marken")}
+        assert "gaertnerei" in marken, marken
+        koepfe = conn.execute(
+            "SELECT count(*) FROM eintrag WHERE kopf IS NOT NULL").fetchone()[0]
+        assert koepfe == 2, "zerschnittenes Memo nicht als Kette vermerkt"
+    finally:
+        conn.rollback()
+        conn.close()
+
+
 def test_import_ohne_argument_nennt_die_vorhandenen_ordner():
     """Ohne Pfad wird der Ordner aus dem Arbeitsverzeichnis geraten - und
     trifft fast nie, weil man im Repo steht und nicht im gemeinten Projekt.

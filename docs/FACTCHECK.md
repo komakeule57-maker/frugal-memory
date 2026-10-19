@@ -121,8 +121,8 @@ consequences:
 
 For WIDERSPRUCH and UNABHAENGIG that's simply wrong, both relations are
 symmetric; only FORTSCHRITT has a direction, and it's carried by `ts`, not by
-call order. Fixed by asking both directions and only accepting what says
-the same thing twice. A fixed order (older id first) would have been the
+call order. Fixed in `pruefe` by asking both directions and only accepting
+what says the same thing twice. A fixed order (older id first) would have been the
 cheaper fix, but would only have made the verdict reproducible, not more
 correct.
 
@@ -134,8 +134,14 @@ texts against themselves: **1 of 4** contradicted itself. A logically
 impossible verdict, hence a hard upper bound on reliability — and it hit
 exactly the advertised use case, since `verdichten` by construction
 delivers near-identical entries. Fixed with
-`faktencheck.deckungsgleich(a, b)`: such pairs no longer go to the device
-and instead get the note that there's nothing to assess here.
+`faktencheck.deckungsgleich(a, b)`: in `pruefe`, such pairs no longer go to
+the device and instead get the note that there's nothing to assess here.
+
+**Both fixes apply to `pruefe` only.** The note that `remember` adds to its
+list of similar entries still asks one direction and does not filter
+identical notes — on purpose: it runs inside every save, and doubling the
+requests would double the wait. Read it as a hint where to look, and use
+`pruefe` when the verdict matters.
 
 After the rework, the two former false alarms report `uneinig` (disputed),
 the real contradiction #1387/#1393 remains WIDERSPRUCH in both
@@ -194,7 +200,8 @@ Settings via the environment:
 | `MEMORY_FC_AUS` | empty | set to `1` to turn the fact check off without dropping the address |
 | `MEMORY_FC_PROBE` | `3.0` | seconds for the `/v1/models` pre-check. **`0` skips it entirely** — useful where the endpoint lists hundreds of ids, or one that isn't the one you ask with, in which case the model check would lock out a perfectly healthy provider. It also saves one request per call; the pre-check exists for a device that is often gone, not for a datacenter |
 | `MEMORY_FC_ZEICHEN` | `200` | note text per side; 200 is the measured sweet spot |
-| `MEMORY_FC_BUDGET` | `25` | seconds across all pairs of one call |
+| `MEMORY_FC_BUDGET` | `25` | seconds across all pairs of one `remember`; `pruefe` ignores it and allows 25 s per direction asked |
+| `MEMORY_FC_FRIST` | `20` | seconds per single request |
 | `MEMORY_FC_SPERRE` | `300` | seconds of cooldown after an expensive failure |
 | `MEMORY_FC_SPERRE_KURZ` | `15` | seconds of cooldown when only the service is missing |
 
@@ -230,6 +237,10 @@ invalidates it. True, but there was no way to re-collect it.
 .venv/bin/python pruefstand_fc.py                     # measure
 .venv/bin/python pruefstand_fc.py --vergleich b.txt   # two prompts, paired
 ```
+
+Further options: `--db PATH` (default `memory.db` next to the script),
+`--zeichen N` (note length, default `MAXZ`), `--leicht N` / `--schwer N`
+(size of the easy and hard part of the set, default 12 each).
 
 **The gold labels aren't guessed after the fact, they fall out of normal
 operation.** Three sources:

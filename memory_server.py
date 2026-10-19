@@ -149,7 +149,7 @@ MARKE_ETABLIERT = 3
 # Zweite Achse neben den Marken: die Marke sagt WO (Projekt), die Art sagt
 # WELCHE SORTE Wissen. Bewusst ein geschlossenes, kurzes Vokabular - ein
 # freies Feld zerfaellt binnen Wochen in "fallstrick", "fallstricke", "pitfall"
-# und filtert dann nichts mehr. Die Datenbank erzwingt es per CHECK.
+# und filtert dann nichts mehr. Die Datenbank erzwingt es per Fremdschluessel auf `art_vokabular`.
 ARTEN = (
     "schnittstelle",  # Signatur, Dateiname, Befehl, Datenformat - woertlich gebraucht
     "fallstrick",     # der naheliegende Weg ist falsch, weil ...
@@ -233,7 +233,7 @@ _TRENNER = re.compile(r"[\s,]+")
 
 # Die einzige Stelle mit der Versionsnummer: pyproject.toml liest sie von hier,
 # und der Server meldet sie jedem Client beim Verbinden (serverInfo).
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 
 server = MCPServer("memory", version=__version__)
 
@@ -253,10 +253,10 @@ def _marken_klausel(marke: str) -> str:
     gibt es diesen Ausweg nicht - also gehoert sie dorthin, wo FTS5 sie ohnehin
     indiziert hat.
 
-    Fuer die Art dagegen schon: seit 2026-09-15 steht dort `EXISTS (... WHERE
-    a.id = mem.rowid ...)`, das laesst die Volltextsuche treiben und probt je
-    Treffer. Die Regel lautet also nicht mehr "alle Filter negativ", sondern
-    "kein Filter darf die Abfrage treiben".
+    Fuer die Art dagegen schon: seit Stand 5 ist sie eine Spalte von
+    `eintrag`, `e.art IN (...)` wird je Treffer geprobt und laesst die
+    Volltextsuche treiben. Die Regel lautet also nicht mehr "alle Filter
+    negativ", sondern "kein Filter darf die Abfrage treiben".
 
     Die Marke wird als Phrase gesucht. Das ist keine exakte Gleichheit: der
     Tokenisierer trennt am Bindestrich, `tags:"leuchtturm"` trifft also auch
@@ -1845,9 +1845,9 @@ def recall(
 
     Args:
         query: Search term(s), FTS5 syntax allowed (e.g. "sqlite AND fts5", "proj*").
-        limit: Maximum number of hits (default 8). Measured: below this,
-            exact matches drop out due to morphology blending them in; above
-            it, mostly just the returned payload grows.
+        limit: Maximum number of hits (default 8). Word-form matches only
+            fill slots the exact matches leave open; a larger limit mostly
+            grows the returned payload.
         art: Restrict to kinds of knowledge, e.g. "fallstrick,entscheidung".
             Possible values: schnittstelle (interface), fallstrick (pitfall),
             entscheidung (decision), messwert (measurement), arbeitsweise
@@ -2256,11 +2256,11 @@ def _kaskade_roh(conn, query: str, limit: int, filter_=("", ()),
     # Der Deckel ist `limit`, die Morphologie fuellt also nur FREIE Plaetze.
     # Bis 2026-09-15 stand hier `limit * 0,6`, damit die Morphologie sichtbar
     # wird - und genau das warf exakte Treffer von Rang 6 bis 8 hinaus.
-    # Gemessen an zwei Pruefstaenden aus Betriebsdaten: bei 47 echten
-    # Umformulierungen stieg die Trefferquote 64 -> 77 %, bei den 117 Fragen,
-    # die schon beim ersten Anlauf trugen, 82 -> 85 %. Der Preis waere, dass
-    # die Morphologie seltener zu sehen ist; er faellt nicht an, weil sie nur
-    # bei 2 % der Faelle der einzige Weg zum Eintrag ist.
+    # Gemessen an 47 echten Umformulierungsketten: Trefferquote 53 -> 64 %.
+    # Die frueher hier genannten 64 -> 77 % waren zu hoch gezaehlt (Zaehlfehler
+    # bei Querverweisen), und "kostet nichts" gilt auf dem gewachsenen Bestand
+    # nicht mehr - beides in docs/MEASUREMENTS.md, "The Ranking Fix, Corrected
+    # Twice".
     deckel = limit
     aus, gesehen = [], set()
     for gruppe in (rows[:deckel], morph, rows[deckel:]):

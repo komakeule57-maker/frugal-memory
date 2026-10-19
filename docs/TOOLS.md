@@ -91,8 +91,8 @@ differently ("the limit is 8" vs. "the default is ten"). That needs
 meaning, not word overlap — the same boundary as with language mixing.
 
 That is exactly where the **opt-in fact check** comes in (see [FACTCHECK.md](FACTCHECK.md)): if
-you have pointed `MEMORY_FC_URL` at a small language model of your own
-and it answers, every line additionally gets a note on how the two
+you have pointed `MEMORY_FC_URL` at a small language model of your own,
+named it in `MEMORY_FC_MODELL`, and it answers, every line additionally gets a note on how the two
 entries relate to each other. Unset — the default — none of this happens
 and no network call is made.
 
@@ -109,7 +109,7 @@ the whole tool: `recall`'s return consists of whole entries. Whoever
 saves a 180 KB file as a single entry also gets it back as a single hit —
 and has gained nothing.
 
-## `verdichten(tags="", art="alle", schwelle=0.5, gruppen=5)`
+## `verdichten(marke="", art="alle", schwelle=0.5, gruppen=5)`
 
 Finds groups of entries that say largely the same thing — typically: an
 old state next to a new one ("version 0.2" next to "version 0.3", "186
@@ -139,7 +139,7 @@ disappear from the default view and remain findable with
 Full-text search, best match first. The default is a **preview**:
 
 ```
-#376 [schnittstelle] 2026-09-02 **Fusions-Katalysator** (`item.fusions_kata…  (raumschiff-project)
+#376 [schnittstelle] 2026-09-02 **Fusions-Katalysator** (`item.fusions_kata… (raumschiff-project)
 ```
 
 That is: id, kind, date, title line, tag. Get the full text of the
@@ -153,9 +153,10 @@ takes priority; otherwise the cut happens at a word boundary.
 If the title line starts mid-sentence **or with a role instead of a
 subject** (`**Werkzeuge:**`/tools, `**How to apply:**`, `Enthaelt:
 …`/contains), the preview appends a note —
-`[Stueck 2 von 4, zerschnittenes Memo #872-#875]` ("piece 2 of 4, a memo
-cut apart"), and from piece 2 onward it includes the head's subject line
-too, since that's not in the piece itself. In that case the entry is a
+`[Stueck 1 von 4, zerschnittenes Memo #872-#875]` ("piece 1 of 4, a memo
+cut apart"). From piece 2 onward it names the head's subject too, since
+that's not in the piece itself: `[Stueck 2 von 4 von "<subject>",
+zerschnittenes Memo #872-#875]`. In that case the entry is a
 fragment from the file import, the context does **not** live in it, and
 the whole chain needs reading (`zeige("872,873,874,875")`). Why these
 exist: [What the Import Broke](IMPORT.md#what-the-import-broke).
@@ -179,12 +180,14 @@ and the tokenizer splits on hyphens, so `marke="leuchtturm"` also matches
 match `mcp-memory`, because the phrase needs all three tokens in
 sequence. `themen()` lists which tags exist.
 
-The filter sits **in the MATCH query, not in the WHERE clause**. A
-positive row filter alongside `ORDER BY rank LIMIT n` costs twenty times
-as much on this dataset (see [MEASUREMENTS.md](MEASUREMENTS.md#preview-vs-full-text)); the existing filters are therefore
-all negative (`NOT IN`), and for the tag that escape hatch doesn't exist.
-Measured, it costs 4.3 → 10.3 ms this way, i.e. a factor of 2.4 instead of
-20.
+The filter sits **in the MATCH query, not in the WHERE clause**. A row
+filter of the form `rowid IN (SELECT …)` alongside `ORDER BY rank LIMIT n`
+looks like an index to SQLite and ends up driving the query — about twenty
+times the cost on the author's dataset. The rule is: no filter may drive
+the query. The kind and the outdated mark are checked per hit on columns
+of the entry (`e.art IN (…)`, `NOT EXISTS (… veraltet …)`); for the tag
+that doesn't work, so it goes where FTS5 has indexed it anyway. Measured,
+it costs 4.3 → 10.3 ms this way, a factor of 2.4 instead of 20.
 
 The search runs in **stages**, from exact to permissive:
 
@@ -192,9 +195,7 @@ The search runs in **stages**, from exact to permissive:
    this order. Its hits are placed ahead of the next stage's, but don't
    crowd them out.
 2. **All terms** — FTS5 implicitly joins multiple words with `AND`.
-3. **Any term** (`OR`) — only if stage 2 found nothing. Also catches
-   invalid FTS5 syntax, which is why you're allowed to type whole
-   questions.
+3. **Any term** (`OR`) — only if stage 2 found nothing.
 4. **Stem and word part** — fills whatever slots are still open.
 
 Stage 1 exists because `AND` across separate tokens only lets BM25 score
@@ -204,17 +205,26 @@ often and a 5 somewhere; the cap from stage 4 then pushed it entirely out
 of the eight-result window. As a phrase, it's rank 1. Costs one extra FTS
 query, measured at 1.1 ms per `recall`.
 
-Stage 4 doesn't *replace* anything. Exact hits keep priority but are
-capped at about 60 % of the slots, so morphology gets a chance to show up
-at all; whatever's capped moves further back, nothing is lost. The
-output notes which stage contributed.
+Stage 4 doesn't *replace* anything: word-form hits only fill slots the
+exact hits leave open. Until 2026-09-15 exact hits were capped at 60 % of
+the slots so that morphology would show up at all — which pushed exact
+hits from ranks 6 to 8 out. Without the cap, the hit rate on 47 real
+reformulation chains rose from 53 to 64 %; what the fix costs on a grown
+dataset is covered in
+[MEASUREMENTS.md](MEASUREMENTS.md#the-ranking-fix-corrected-twice).
+The output notes which stage contributed.
 
 Whoever writes FTS5 syntax themselves (`"`, `*`, `()`, `AND`/`OR`/`NOT`)
-gets exactly that and no extension. The hyphen deliberately does **not**
-count as syntax — it shows up constantly in German questions.
+gets exactly that and no extension. If it isn't valid FTS5 — usually a
+plain question with punctuation, `Ueberblick: welche Werkzeuge?` reads as
+a column filter — the same question runs through the stages as a word
+sequence instead, with the note "Sonderzeichen ignoriert" (special
+characters ignored). That's why you're allowed to type whole questions.
+The hyphen deliberately does **not** count as syntax — it shows up
+constantly in German questions.
 
-On `limit`: 8 is measured. Below that, morphology blending crowds out
-exact hits; above it, mostly the returned payload grows.
+On `limit`: the default is 8; a larger one mostly grows the returned
+payload.
 
 ### `marke=` is a hard filter — and says so when it hurts
 
@@ -230,7 +240,7 @@ same search once without the tag. If the best hit of that search lies
 outside the project, a last line names it:
 
 ```
-Ausserhalb von raumschiff-project passt besser: #812 [fallstrick] 2026-09-12 Die Shell bricht bei Umlauten im Pfad ab…  (shell-fallen) - ohne marke= noch einmal probieren.
+Ausserhalb von raumschiff-project passt besser: #812 [fallstrick] 2026-09-12 Die Shell bricht bei Umlauten im Pfad ab… (shell-fallen) - ohne marke= noch einmal probieren.
 ```
 
 It is a pointer, not a ninth hit: the list itself stays inside the tag.
