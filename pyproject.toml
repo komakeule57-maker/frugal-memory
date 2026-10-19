@@ -32,9 +32,10 @@ Issues = "https://github.com/komakeule57-maker/frugal-memory/issues"
 [project.scripts]
 frugal-memory = "memory_server:main"
 frugal-memory-nachziehen = "nachziehen:main"
+frugal-memory-import = "import_memos:main"
 
 [tool.setuptools]
-py-modules = ["memory_server", "morphologie", "texte_en", "werkzeuge_en", "faktencheck", "nachziehen"]
+py-modules = ["memory_server", "morphologie", "texte_en", "werkzeuge_en", "faktencheck", "nachziehen", "import_memos"]
 
 [tool.setuptools.dynamic]
 version = { attr = "memory_server.__version__" }

@@ -11,6 +11,7 @@ Geschrieben wird in `eintrag`, den Speicher ab Schemastand 5; den FTS-Index
 und bekommen sie beim Lesen per einordnen().
 
     python3 import_memos.py [ordner] [--trocken] [--mit-index]
+    frugal-memory-import [ordner] [--trocken] [--mit-index]   (pip-Installation)
 
 --mit-index nimmt zusaetzlich MEMORY.md auf, und zwar zeilenweise statt
 absatzweise: jeder Listenpunkt ist ein eigener Eintrag. Das ist noetig, bevor
@@ -114,7 +115,9 @@ def main() -> int:
                 print("Auf diesem Rechner liegen Memos in:")
                 for k in gefunden:
                     print(f"    {k}")
-                print(f"Also z.B.: python3 {Path(sys.argv[0]).name} {gefunden[0]}")
+                name = Path(sys.argv[0]).name
+                aufruf = f"python3 {name}" if name.endswith(".py") else name
+                print(f"Also z.B.: {aufruf} {gefunden[0]}")
             else:
                 print(f"Unter {PROJEKTWURZEL}/*/memory liegt keiner - Pfad mitgeben.")
         return 1

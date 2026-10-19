@@ -3,17 +3,17 @@
 Importing an existing folder of `.md` notes, the damage the import did to
 the author's own data, and the repairs that followed.
 
-The script is not part of the PyPI package; run it from a checkout of the
-repository:
-
 ```bash
-.venv/bin/python import_memos.py [folder] [--trocken] [--mit-index]
+frugal-memory-import [folder] [--trocken] [--mit-index]       # pip install
+uvx --from frugal-memory frugal-memory-import [folder] …      # uv, no install
+.venv/bin/python import_memos.py [folder] [--trocken] …       # checkout
 ```
 
-From a checkout the database is `memory.db` next to the script. If the
-server itself runs from a pip install, point the import at that file:
-`MEMORY_DB=~/.local/share/frugal-memory/memory.db .venv/bin/python
-import_memos.py …`. `--trocken` (dry run) only counts.
+The import writes to the same file the server uses when installed the same
+way: `~/.local/share/frugal-memory/memory.db` for pip and uvx, `memory.db`
+next to the script for a checkout, `MEMORY_DB` if set. Run it with the same
+`MEMORY_LANG` as the server; a database built in the other language is
+refused rather than mixed. `--trocken` (dry run) only counts.
 
 Reads a folder full of `*.md` files paragraph by paragraph, tag = file
 name, timestamp from the `modified` frontmatter (otherwise file time).

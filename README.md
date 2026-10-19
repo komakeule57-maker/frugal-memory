@@ -92,6 +92,10 @@ The database is created on first use at
 `~/.local/share/frugal-memory/memory.db` (`$XDG_DATA_HOME` if set).
 `frugal-memory-nachziehen` is the upkeep script described in
 [DESIGN.md](https://github.com/komakeule57-maker/frugal-memory/blob/main/docs/DESIGN.md).
+Coming from a folder of markdown notes, `frugal-memory-import <folder>`
+moves them in, paragraph by paragraph
+([IMPORT.md](https://github.com/komakeule57-maker/frugal-memory/blob/main/docs/IMPORT.md)).
+With `uvx`, both run as `uvx --from frugal-memory frugal-memory-import …`.
 
 Or from a checkout of this repository:
 
@@ -285,7 +289,7 @@ script and the measurement reports. The English stemmer is new and has
 | `faktencheck.py` | opt-in second opinion via any OpenAI-compatible model (off unless configured) |
 | `pruefstand_fc.py` | measures the fact check against gold labels from the dataset |
 | `pruefpaare_gebaut.json` | the hand-built and hand-found contradiction pairs |
-| `import_memos.py` | import a file-based memory *(see docs/IMPORT.md)* |
+| `import_memos.py` | import a folder of markdown notes (`frugal-memory-import` after pip install; see docs/IMPORT.md) |
 | `test_memory.py` | regression net, one case per pitfall (no pytest) |
 | `skills/frugal-memory/SKILL.md` | working rules for the agent, as a Claude Code skill |
 | `requirements.txt` | just `mcp>=2.2.0` |
