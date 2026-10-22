@@ -233,9 +233,31 @@ _TRENNER = re.compile(r"[\s,]+")
 
 # Die einzige Stelle mit der Versionsnummer: pyproject.toml liest sie von hier,
 # und der Server meldet sie jedem Client beim Verbinden (serverInfo).
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 
-server = MCPServer("memory", version=__version__)
+# Die Arbeitsregeln in Kurzform. Claude Code legt sie jeder Sitzung bei, in
+# der der Server eingebunden ist - auch dort, wo nur `uvx frugal-memory`
+# installiert wurde und der Skill (die ausfuehrliche Fassung) fehlt. Deshalb
+# kurz: sie kosten in jeder Sitzung, der Skill nur bei Bedarf.
+ANWEISUNG = (
+    "Gedaechtnis ueber fruehere Arbeit: Projekte, Entscheidungen, Fallstricke, Messwerte. "
+    "Vor dem Durchsuchen von Dateien nach frueherer Arbeit zuerst recall(query, marke=\"<projekt>\"); "
+    "es liefert eine Vorschau, den Volltext dann zeige(\"ids\"). Die Suche vergleicht Woerter, "
+    "nicht Bedeutung: findet sie nichts, dieselbe Frage in der anderen Sprache stellen. "
+    "Merken mit remember(text, tags, art): ein Fakt je Eintrag, genau eine Art, tags = Projekt. "
+    "Ueberholtes mit ersetzt=\"ids\" abloesen statt Neues danebenzulegen. "
+    "Ausfuehrliche Regeln: der Befehl frugal-memory-skill installiert den Skill fuer Claude Code.")
+ANWEISUNG_EN = (
+    "Memory of past work: projects, decisions, pitfalls, measurements. "
+    "Before searching files for earlier work, call recall(query, tag=\"<project>\") first; "
+    "it returns a preview, then show(\"ids\") for full text. The search matches words, "
+    "not meaning: if it finds nothing, ask again in the other language. "
+    "Store with remember(text, tags, kind): one fact per entry, exactly one kind, tags = project. "
+    "Retire outdated entries with supersedes=\"ids\" instead of adding new ones beside them. "
+    "Full rules: the command frugal-memory-skill installs the skill for Claude Code.")
+
+server = MCPServer("memory", version=__version__,
+                   instructions=ANWEISUNG_EN if _en() else ANWEISUNG)
 
 
 def _marken(tags: str) -> list:
@@ -2625,6 +2647,8 @@ def _gast_einrichten() -> None:
     """Schaltet auf Gastbetrieb: nur lesen, und nur die Werkzeuge fuer Gaeste."""
     global GAST
     GAST = True
+    # Die Anweisung spricht von remember und ersetzt=, die ein Gast nicht hat.
+    server._lowlevel_server.instructions = None
     for werkzeug in list(server._tool_manager.list_tools()):
         if werkzeug.name not in GASTWERKZEUGE:
             server._tool_manager.remove_tool(werkzeug.name)

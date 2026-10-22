@@ -95,7 +95,8 @@ The database is created on first use at
 Coming from a folder of markdown notes, `frugal-memory-import <folder>`
 moves them in, paragraph by paragraph
 ([IMPORT.md](https://github.com/komakeule57-maker/frugal-memory/blob/main/docs/IMPORT.md)).
-With `uvx`, both run as `uvx --from frugal-memory frugal-memory-import …`.
+`frugal-memory-skill` installs the working rules for Claude Code (see below).
+With `uvx`, all of them run as `uvx --from frugal-memory frugal-memory-import …`.
 
 Or from a checkout of this repository:
 
@@ -138,15 +139,23 @@ single entry and you get it back as a single hit, having gained nothing.
 
 The tools alone don't tell an agent the working rules: search before
 reading files, `recall` → `zeige`, exactly one kind per entry, supersede
-instead of accumulate, retry in the other language. Those live in a skill
-that ships with the repo (not with the PyPI package):
+instead of accumulate, retry in the other language. Two layers carry them:
+
+- **The short form comes with the server.** On connecting it sends about
+  600 characters of instructions (German, or English with `MEMORY_LANG=en`),
+  which Claude Code adds to every session that has the server. Guest mode
+  (`--gast`) sends none, since it cannot store anything.
+- **The full rules are a skill.** It ships with the repo and the PyPI
+  package; one command installs it:
 
 ```bash
-cp -r skills/frugal-memory ~/.claude/skills/
+uvx --from frugal-memory frugal-memory-skill   # or frugal-memory-skill after pip install
+cp -r skills/frugal-memory ~/.claude/skills/    # or from a clone
 ```
 
-Claude Code loads its full text only when the memory comes up; until then
-only the one-line description sits in context.
+Claude Code loads the skill's full text only when the memory comes up;
+until then only its one-line description sits in context. An existing
+`SKILL.md` that differs is left alone unless you add `--force`.
 
 ### Reading another machine's memory
 
@@ -291,7 +300,8 @@ script and the measurement reports. The English stemmer is new and has
 | `pruefpaare_gebaut.json` | the hand-built and hand-found contradiction pairs |
 | `import_memos.py` | import a folder of markdown notes (`frugal-memory-import` after pip install; see docs/IMPORT.md) |
 | `test_memory.py` | regression net, one case per pitfall (no pytest) |
-| `skills/frugal-memory/SKILL.md` | working rules for the agent, as a Claude Code skill |
+| `skills/frugal-memory/SKILL.md` | working rules for the agent, as a Claude Code skill (in the package too) |
+| `skill_installieren.py` | copies the skill to `~/.claude/skills/` (`frugal-memory-skill` after pip install) |
 | `requirements.txt` | just `mcp>=2.2.0` |
 | `pyproject.toml` | package definition for PyPI (`frugal-memory`) |
 | `server.json` | entry in the official MCP registry |

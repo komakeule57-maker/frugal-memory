@@ -33,9 +33,15 @@ Issues = "https://github.com/komakeule57-maker/frugal-memory/issues"
 frugal-memory = "memory_server:main"
 frugal-memory-nachziehen = "nachziehen:main"
 frugal-memory-import = "import_memos:main"
+frugal-memory-skill = "skill_installieren:main"
 
 [tool.setuptools]
-py-modules = ["memory_server", "morphologie", "texte_en", "werkzeuge_en", "faktencheck", "nachziehen", "import_memos"]
+py-modules = ["memory_server", "morphologie", "texte_en", "werkzeuge_en", "faktencheck", "nachziehen", "import_memos", "skill_installieren"]
+# Der Skill als Paketdaten, damit auch pip/uvx ihn haben (frugal-memory-skill).
+# Quelle bleibt skills/frugal-memory/SKILL.md - kein zweites Exemplar.
+packages = ["frugal_memory_skill"]
+package-dir = { "frugal_memory_skill" = "skills/frugal-memory" }
+package-data = { "frugal_memory_skill" = ["SKILL.md"] }
 
 [tool.setuptools.dynamic]
 version = { attr = "memory_server.__version__" }

@@ -20,6 +20,7 @@ import contextlib
 import importlib
 import io
 import os
+import json
 import re
 import sqlite3
 import shutil
@@ -1039,7 +1040,8 @@ def test_jedes_skript_laeuft_trocken_gegen_eine_stand_5_datenbank():
         "faktencheck.py": "spricht HTTP mit dem Board, kein SQL",
         "texte_en.py": "nur die Uebersetzungstabelle, kein Code",
         "werkzeuge_en.py": "duenne Huellen um die Werkzeuge, siehe die _en-Faelle",
-        "zg.py": "fremdes Werkzeug (ZeroGit-Sicherung), gehoert nicht zum Projekt"
+        "zg.py": "fremdes Werkzeug (ZeroGit-Sicherung), gehoert nicht zum Projekt",
+        "skill_installieren.py": "kopiert eine Textdatei, kein SQL; siehe test_skill_befehl_*"
                  " und spricht beim Trockenlauf das Netz an",
         Path(__file__).name: "diese Datei",
     }
@@ -1573,6 +1575,61 @@ def test_db_pfad_arbeitskopie_paket_und_vorgabe():
             os.environ.pop(k, None)
             if v is not None:
                 os.environ[k] = v
+
+
+# ---------------------------------------------------------------------------
+# Anweisung an den Client und Skill im Paket
+# ---------------------------------------------------------------------------
+
+def _anweisung_und_werkzeuge(umgebung=None, gast=False):
+    import subprocess
+    probe = ("import json, inspect, memory_server as ms; " + ("ms._gast_einrichten(); " if gast else "")
+             + "print(json.dumps([ms.server.instructions, {t.name: list(inspect.signature(t.fn).parameters)"
+             " for t in ms.server._tool_manager.list_tools()}]))")
+    aus = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, check=True,
+                         env={**os.environ, "MEMORY_FC_AUS": "1", **(umgebung or {})},
+                         cwd=Path(__file__).resolve().parent).stdout
+    return json.loads(aus)
+
+
+def test_anweisung_nennt_nur_vorhandene_werkzeuge_und_parameter():
+    """Die Anweisung steht in jeder Sitzung - ein Werkzeug- oder Parametername,
+    den es nicht gibt, schickte das Modell in jeder Sitzung in einen Fehler."""
+    for umgebung in ({}, {"MEMORY_LANG": "en"}):
+        anweisung, werkzeuge = _anweisung_und_werkzeuge(umgebung)
+        assert anweisung and len(anweisung) <= 700, (umgebung, len(anweisung or ""))
+        aufrufe = re.findall(r"\b(\w+)\(([^)]*)\)", anweisung)
+        assert len(aufrufe) >= 3, aufrufe
+        for name, argumente in aufrufe:
+            assert name in werkzeuge, (umgebung, name)
+            for arg in re.findall(r"(\w+)\s*=", argumente) + [a.strip() for a in argumente.split(",")
+                                                            if a.strip() and "=" not in a and '"' not in a]:
+                assert arg in werkzeuge[name], (umgebung, name, arg)
+        for param in re.findall(r"\b(\w+)=\\?\"", anweisung):
+            assert any(param in p for p in werkzeuge.values()), (umgebung, param)
+        assert "frugal-memory-skill" in anweisung
+
+
+def test_gast_bekommt_keine_anweisung():
+    """Sie spricht von remember und ersetzt=, die ein Gast nicht hat."""
+    anweisung, werkzeuge = _anweisung_und_werkzeuge(gast=True)
+    assert anweisung is None and "remember" not in werkzeuge, (anweisung, werkzeuge)
+
+
+def test_skill_befehl_installiert_und_ueberschreibt_nicht_ungefragt():
+    import skill_installieren as si
+    quelle = (Path(__file__).resolve().parent / "skills" / "frugal-memory" / "SKILL.md").read_text(encoding="utf-8")
+    assert si.skill_text() == quelle
+    ziel = Path(tempfile.mkdtemp(prefix="skilltest-"))
+    try:
+        datei = ziel / "frugal-memory" / "SKILL.md"
+        assert si.main(["--ziel", str(ziel)]) == 0 and datei.read_text(encoding="utf-8") == quelle
+        assert si.main(["--ziel", str(ziel)]) == 0, "gleicher Stand muss durchgehen"
+        datei.write_text("eigene Fassung", encoding="utf-8")
+        assert si.main(["--ziel", str(ziel)]) == 1 and datei.read_text(encoding="utf-8") == "eigene Fassung"
+        assert si.main(["--ziel", str(ziel), "--force"]) == 0 and datei.read_text(encoding="utf-8") == quelle
+    finally:
+        shutil.rmtree(ziel, ignore_errors=True)
 
 
 def main() -> int:
