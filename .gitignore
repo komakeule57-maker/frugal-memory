@@ -5,6 +5,13 @@ memory.db
 memory.db-wal
 memory.db-shm
 memory.db.vor-*
+# Ebenso die Dateien der beiden Erweiterungen (--archiv, --messbuch).
+archive.db
+archive.db-wal
+archive.db-shm
+messbuch.db
+messbuch.db-wal
+messbuch.db-shm
 
 # Handgemachte Sicherungen aus der Zeit vor diesem Repo. Ihr Inhalt steckt
 # seit dem 2026-09-15 in der Historie.

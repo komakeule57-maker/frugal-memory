@@ -11,9 +11,10 @@ Projektmarke fuer die Stammsuche unsichtbar war (#1424).
 Nach jedem Eingriff laufen lassen, der `content` oder `tags` ausserhalb von
 `remember` anfasst, und nach jeder Aenderung an morphologie.py.
 
-    python3 nachziehen.py [--probe]
+    python3 nachziehen.py [--probe] [--archiv]
 
---probe zeigt nur an, was sich aendern wuerde.
+--probe zeigt nur an, was sich aendern wuerde; --archiv nimmt sich das
+Literaturarchiv vor (archive.db bzw. ARCHIVE_DB) statt des Gedaechtnisses.
 """
 
 import sys
@@ -28,6 +29,8 @@ from memory_server import (
 
 def main() -> int:
     probe = "--probe" in sys.argv
+    if "--archiv" in sys.argv or "--archive" in sys.argv:
+        memory_server._archiv_einrichten()
     # Rechnet ohnehin alles in der Sprache des Servers (MEMORY_LANG) neu, darf
     # also auch die Sprachmarke der Datei umschreiben. Mit --probe wird sie
     # wie alles andere zurueckgerollt.

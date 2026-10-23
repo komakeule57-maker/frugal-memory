@@ -164,4 +164,15 @@ TEXTE_EN = {
     'Fehler: keine Id angegeben, z.B. zeige("376,481").':
         'Error: no id given, e.g. show("376,481").',
     "#{i} - kein solcher Eintrag.": "#{i} - no such entry.",
+    # Archiv (--archiv): Quellenabgleich und Ausgeblendetes
+    "Dieselbe Quelle steht schon im Archiv - ergaenzen oder abloesen (ersetzt=) statt danebenlegen?":
+        "The same source is already in the archive - extend or supersede (supersedes=) instead of adding alongside?",
+    "Keine Fundstelle erkannt (Link, arXiv-Nummer oder DOI) - ohne sie ist der Eintrag nicht nachpruefbar.":
+        "No source recognized (link, arXiv number or DOI) - without one the entry cannot be checked.",
+    "Belegstaerke fehlt: Volltext, Abstract oder unbestaetigt? Ungepruefte Hinweise gehoeren als art=spur ins Archiv.":
+        "Evidence level missing: full text, abstract or unconfirmed? Unchecked hints belong in the archive as kind=lead.",
+    ' - aber {n} Spuren/Verworfene ausgeblendet. art="spur,verworfen" holt sie.':
+        ' - but {n} leads/rejected hidden. kind="lead,rejected" shows them.',
+    ', {n} Spuren/Verworfene ausgeblendet (art="spur,verworfen")':
+        ', {n} leads/rejected hidden (kind="lead,rejected")',
 }

@@ -46,6 +46,12 @@ jobs:
         shell: bash
         run: python test_memory.py
 
+      - name: Erweiterungen (Archiv, Messbuch)
+        shell: bash
+        run: |
+          python test_archiv.py
+          python test_messbuch.py
+
       # Das Paket so, wie es von PyPI kommt: gebaut, in eine frische Umgebung
       # installiert, die Befehle aufgerufen. Faengt fehlende Module und
       # Paketdaten, die das Regressionsnetz im Quellordner nie sieht.
@@ -61,3 +67,5 @@ jobs:
           "$BIN/frugal-memory-skill" --ziel "$RUNNER_TEMP/skills"
           test -s "$RUNNER_TEMP/skills/frugal-memory/SKILL.md"
           "$BIN/python" -c "import memory_server as m; print('frugal-memory', m.__version__)"
+          "$BIN/python" -c "import sys, memory_server as m; sys.argv += ['--messbuch']; m.server.run = lambda **k: None; m.main(); print(sorted(t.name for t in m.server._tool_manager.list_tools()))"
+          "$BIN/python" -c "import sys, memory_server as m; sys.argv += ['--archiv']; m.server.run = lambda **k: None; m.main(); print(m.DB_PATH)"

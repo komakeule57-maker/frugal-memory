@@ -26,21 +26,26 @@ try:
 except Exception:  # pragma: no cover - Notausgang, kein Normalfall
     faktencheck = None
 
-def _db_pfad(hier: Path | None = None) -> Path:
-    """Wo die Datenbank liegt. MEMORY_DB geht vor.
+def _db_pfad(hier: Path | None = None, datei: str = "memory.db",
+             umgebung: str = "MEMORY_DB") -> Path:
+    """Wo eine Datei liegt: das Gedaechtnis, das Archiv oder das Messbuch.
+
+    Die Umgebungsvariable der jeweiligen Datei geht vor (MEMORY_DB,
+    ARCHIVE_DB, MESSBUCH_DB) - und nur die eigene: ein gesetztes MEMORY_DB
+    darf das Archiv nie auf das Gedaechtnis umleiten.
 
     Sonst neben dem Skript, wie seit jeher fuer eine Arbeitskopie des Repos -
     ausser der Server ist per pip installiert: dann laege sie im Paketordner
     und waere mit dem naechsten Update weg. Fuer diesen Fall das
     Datenverzeichnis des Nutzers (XDG_DATA_HOME, sonst ~/.local/share).
     """
-    if os.environ.get("MEMORY_DB"):
-        return Path(os.environ["MEMORY_DB"]).expanduser()
+    if os.environ.get(umgebung):
+        return Path(os.environ[umgebung]).expanduser()
     hier = hier or Path(__file__).resolve().parent
     if hier.name in ("site-packages", "dist-packages"):
         basis = os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share"
-        return Path(basis) / "frugal-memory" / "memory.db"
-    return hier / "memory.db"
+        return Path(basis) / "frugal-memory" / datei
+    return hier / datei
 
 
 DB_PATH = _db_pfad()
@@ -168,6 +173,29 @@ UNSORTIERT = "gemischt"
 STUMM = ("verlauf",)
 
 # --------------------------------------------------------------------------
+# Archiv (`--archiv`): dieselbe Maschine als Literaturarchiv, das sich alle
+# Projekte teilen. Anders sind nur Datei, Name, Arten und der Quellenabgleich
+# beim Speichern (`_quellen_abgleich`); `_archiv_einrichten` schaltet um.
+# Der Name steht an JEDER ausgegebenen Nummer (archiv#12), damit sie nie mit
+# einer Gedaechtnisnummer verwechselt wird.
+# --------------------------------------------------------------------------
+ARCHIV = False
+ARTEN_ARCHIV = (
+    "befund",      # was eine Arbeit gemessen/gezeigt hat: Zahl, Aufbau, Modellgroesse
+    "methode",     # ein Verfahren, das sich uebernehmen laesst (Rezept, Trick, Algorithmus)
+    "ueberblick",  # Uebersichtsarbeit, Einstieg in ein Gebiet, Begriffsklaerung
+    "werkzeug",    # Code, Datensatz, Benchmark, Bibliothek
+    "luecke",      # gesucht und NICHT gefunden: wo niemand misst (selbst ein Befund)
+    "spur",        # ungeprueft: Hinweis aus Zitat oder Zweitmeinung, Quelle nicht geoeffnet
+    "verworfen",   # geprueft und verworfen: erfunden, falsche Nummer, falsch zugeordnet
+)
+STUMM_ARCHIV = ("spur", "verworfen")
+# Ein Literatureintrag (Zitat, Link, Groesse, Befund, Bezug, Beleg) misst
+# 1.000-2.500 Zeichen; der Laengenhinweis soll dort nur die Sammelsurien treffen.
+LAENGE_HINWEIS = 900
+LAENGE_HINWEIS_ARCHIV = 3000
+
+# --------------------------------------------------------------------------
 # Sprache: MEMORY_LANG=en schaltet Werkzeugnamen, Meldungen, Art-Namen und den
 # Stemmer auf Englisch. Die Datenbank bleibt dieselbe: die Arten stehen dort
 # immer deutsch, uebersetzt wird nur an der Grenze nach aussen.
@@ -181,6 +209,16 @@ ARTEN_EN = {
     "messwert": "measurement",
     "arbeitsweise": "workflow",
     "verlauf": "history",
+    UNSORTIERT: "unsorted",
+}
+ARTEN_EN_ARCHIV = {
+    "befund": "finding",
+    "methode": "method",
+    "ueberblick": "survey",
+    "werkzeug": "resource",
+    "luecke": "gap",
+    "spur": "lead",
+    "verworfen": "rejected",
     UNSORTIERT: "unsorted",
 }
 # Englische Namen werden in BEIDEN Sprachen angenommen - kostet nichts und
@@ -233,7 +271,7 @@ _TRENNER = re.compile(r"[\s,]+")
 
 # Die einzige Stelle mit der Versionsnummer: pyproject.toml liest sie von hier,
 # und der Server meldet sie jedem Client beim Verbinden (serverInfo).
-__version__ = "0.1.5"
+__version__ = "0.2.0"
 
 # Die Arbeitsregeln in Kurzform. Claude Code legt sie jeder Sitzung bei, in
 # der der Server eingebunden ist - auch dort, wo nur `uvx frugal-memory`
@@ -255,6 +293,23 @@ ANWEISUNG_EN = (
     "Store with remember(text, tags, kind): one fact per entry, exactly one kind, tags = project. "
     "Retire outdated entries with supersedes=\"ids\" instead of adding new ones beside them. "
     "Full rules: the command frugal-memory-skill installs the skill for Claude Code.")
+
+ANWEISUNG_ARCHIV = (
+    "Gemeinsames Literaturarchiv aller Projekte (Fachliteratur, Paper, Datensaetze). "
+    "VOR jeder Web- oder Literatursuche hier recall(query), ohne marke=: der Wert liegt im "
+    "Fund aus einem anderen Projekt; Volltext per zeige(\"ids\"). Jede gepruefte Fundstelle "
+    "ablegen mit remember(text, tags, art). Ein Eintrag = eine Quelle mit einem Befund: Zitat, Link, "
+    "Befund, Bezug, Belegstaerke (Volltext/Abstract/unbestaetigt). tags = zuerst das Thema "
+    "(z.B. int8-training), dann das Projekt. Nummern heissen archiv#N und sind nie "
+    "Gedaechtnisnummern.")
+ANWEISUNG_ARCHIV_EN = (
+    "Shared literature archive of all projects (papers, datasets, prior work). "
+    "BEFORE any web or literature search, call recall(query) here, without tag=: the value "
+    "lies in what another project found; full text via show(\"ids\"). Store every checked "
+    "source with remember(text, tags, kind). One entry = one source with one finding: citation, "
+    "link, finding, relevance, evidence (full text/abstract/unconfirmed). tags = the topic "
+    "first (e.g. int8-training), then the project. Numbers read archive#N and are never "
+    "memory numbers.")
 
 server = MCPServer("memory", version=__version__,
                    instructions=ANWEISUNG_EN if _en() else ANWEISUNG)
@@ -388,11 +443,24 @@ def _mit_namen(text: str) -> str:
 
 
 def _lesend(werkzeug):
-    """Meldet ein lesendes Werkzeug an; im Gastbetrieb traegt seine Ausgabe den Namen."""
+    """Meldet ein lesendes Werkzeug an; im Gast- und Archivbetrieb traegt seine Ausgabe den Namen."""
     @functools.wraps(werkzeug)
     def huelle(*args, **kwargs):
         aus = werkzeug(*args, **kwargs)
-        return _mit_namen(aus) if GAST and isinstance(aus, str) else aus
+        return _mit_namen(aus) if (GAST or ARCHIV) and isinstance(aus, str) else aus
+    return server.tool()(huelle)
+
+
+def _schreibend(werkzeug):
+    """Meldet ein schreibendes Werkzeug an; im Archivbetrieb traegt seine Ausgabe den Namen.
+
+    Ein Gast hat keine schreibenden Werkzeuge - das Archiv dagegen nennt auch
+    beim Speichern `archiv#12`, damit die Nummer schon richtig notiert wird.
+    """
+    @functools.wraps(werkzeug)
+    def huelle(*args, **kwargs):
+        aus = werkzeug(*args, **kwargs)
+        return _mit_namen(aus) if ARCHIV and isinstance(aus, str) else aus
     return server.tool()(huelle)
 
 
@@ -1282,7 +1350,64 @@ def _urteile(text: str, aehnlich: list) -> list:
         return [None] * len(aehnlich)
 
 
-@server.tool()
+# --------------------------------------------------------------------------
+# Quellenabgleich (nur Archiv). Mehrere Projekte stossen auf dasselbe Paper;
+# der Wortvergleich von `_dubletten` merkt das nur, wenn sie es aehnlich
+# beschreiben. Die Fundstelle selbst (arXiv-Nummer, DOI, Link) ist der sichere
+# Schluessel: steht sie schon im Archiv, sagt `remember` es.
+# --------------------------------------------------------------------------
+_ARXIV = re.compile(r"(?i)(?:arxiv[:\s]*|arxiv\.org/(?:abs|pdf|html)/)(\d{4}\.\d{4,5})")
+_DOI = re.compile(r"\b(10\.\d{4,9}/[^\s,;)\]>\"'`„“”]+)")
+_LINK = re.compile(r"https?://(?:www\.)?([^\s)\]>\"'`„“”]+)")
+# Belegstaerke: Volltext / Abstract / unbestaetigt, deutsch oder englisch.
+_BELEG = re.compile(r"(?i)beleg|evidence")
+_ARTEN_MIT_QUELLE = ("befund", "methode", "ueberblick", "werkzeug")
+
+
+def _quellen(text: str) -> list:
+    """Die Fundstellen eines Textes als Suchschluessel, ohne Doppel, in Textfolge."""
+    aus = [m.group(1) for m in _ARXIV.finditer(text)]
+    aus += [m.group(1).rstrip(".") for m in _DOI.finditer(text)]
+    for m in _LINK.finditer(text):
+        link = m.group(1).rstrip("./")
+        if link.lower().startswith("arxiv.org/") or link.lower().startswith("doi.org/"):
+            continue   # schon als Nummer bzw. DOI erfasst
+        if "/" not in link:
+            continue   # nur ein Rechnername (github.com) traefe jeden Eintrag, der ihn nennt
+        aus.append(link)
+    return list(dict.fromkeys(aus))
+
+
+def _quellen_abgleich(conn, text: str, ausser: int) -> tuple:
+    """Welche lebenden Eintraege dieselbe Fundstelle nennen: (quellen, [(id, quelle, inhalt)])."""
+    quellen = _quellen(text)
+    treffer = {}
+    for q in quellen:
+        for rid, inhalt in conn.execute(
+                "SELECT e.id, e.content FROM eintrag e WHERE e.id != ? AND instr(lower(e.content), lower(?)) > 0"
+                " AND NOT EXISTS (SELECT 1 FROM veraltet v WHERE v.id = e.id) ORDER BY e.id",
+                (ausser, q)):
+            treffer.setdefault(rid, (rid, q, inhalt))
+    return quellen, list(treffer.values())[:DECKEL_OFFEN]
+
+
+def _quellenhinweise(art: str, text: str, quellen: list, gleiche: list) -> list:
+    hinweise = []
+    if gleiche:
+        hinweise.append(_t("Dieselbe Quelle steht schon im Archiv - ergaenzen oder abloesen "
+                           "(ersetzt=) statt danebenlegen?"))
+        for rid, q, inhalt in gleiche:
+            hinweise.append(f"  #{rid} ({q}) {_titel(inhalt)}")
+    if art in _ARTEN_MIT_QUELLE and not quellen:
+        hinweise.append(_t("Keine Fundstelle erkannt (Link, arXiv-Nummer oder DOI) - "
+                           "ohne sie ist der Eintrag nicht nachpruefbar."))
+    if art in _ARTEN_MIT_QUELLE and not _BELEG.search(text):
+        hinweise.append(_t("Belegstaerke fehlt: Volltext, Abstract oder unbestaetigt? "
+                           "Ungepruefte Hinweise gehoeren als art=spur ins Archiv."))
+    return hinweise
+
+
+@_schreibend
 def remember(text: str, tags: str = "", art: str = "", ersetzt: str = "") -> str:
     """Stores a text permanently in memory.
 
@@ -1365,6 +1490,12 @@ def remember(text: str, tags: str = "", art: str = "", ersetzt: str = "") -> str
             aehnlich = _dubletten(conn, text, ausser=neu_id)
         except Exception:  # pragma: no cover - Notausgang, kein Normalfall
             aehnlich = []
+        quellen, gleiche_quelle = ["?"], []
+        if ARCHIV:
+            try:
+                quellen, gleiche_quelle = _quellen_abgleich(conn, text, ausser=neu_id)
+            except Exception:  # pragma: no cover - Notausgang, kein Normalfall
+                pass
     finally:
         conn.close()
 
@@ -1378,6 +1509,8 @@ def remember(text: str, tags: str = "", art: str = "", ersetzt: str = "") -> str
             "ueber die Volltextsuche zu finden: {arten}.", arten=_artenliste()))
     for mahnung in _zuschnitt(text) + markenhinweise:
         zeilen.append(mahnung)
+    if ARCHIV:
+        zeilen.extend(_quellenhinweise(meine_art, text, quellen, gleiche_quelle))
     if abgeloest:
         zeilen.append(_t("Als veraltet markiert: {ids}",
                          ids=", ".join("#" + str(i) for i in abgeloest)))
@@ -1412,11 +1545,11 @@ def _zuschnitt(text: str) -> list:
     nicht den Normalfall.
     """
     hinweise = []
-    if len(text) > 900:
+    if len(text) > LAENGE_HINWEIS:
         hinweise.append(_t(
             "Eintrag ist {n} Zeichen lang (Mittel im Bestand: ~600). "
             "recall gibt ganze Eintraege zurueck - lieber zwei daraus machen.", n=len(text)))
-    if _DATUMSKOPF.match(text.lstrip()) and len(text) > 400:
+    if not ARCHIV and _DATUMSKOPF.match(text.lstrip()) and len(text) > 400:
         hinweise.append(_t(
             "Faengt mit einem Datum an: das ist meist Chronik plus Wissen in einem "
             "Absatz. Die Chronik als art=verlauf trennen haelt die Suche sauber."))
@@ -1821,7 +1954,7 @@ def pruefe(ids: str) -> str:
     return "\n".join(aus)
 
 
-@server.tool()
+@_schreibend
 def vergessen(ids: str, grund: str = "") -> str:
     """Marks entries as outdated, without a replacement.
 
@@ -1941,7 +2074,10 @@ def recall(
         leer = _t("Keine Treffer fuer: {query}{in_marke}", query=query, in_marke=in_marke)
         if in_marke:
             leer += _t(" - ohne marke= noch einmal probieren, die Marke koennte anders heissen (themen()).")
-        if zurueckgehalten:
+        if zurueckgehalten and ARCHIV:
+            leer += _t(' - aber {n} Spuren/Verworfene ausgeblendet.'
+                       ' art="spur,verworfen" holt sie.', n=zurueckgehalten)
+        elif zurueckgehalten:
             leer += _t(
                 ' - aber {n} in der ausgeblendeten Chronik.'
                 ' art="verlauf" holt sie.', n=zurueckgehalten)
@@ -1957,7 +2093,9 @@ def recall(
         lines.append(_zeile(rid, ts, content, tags, art, voll, vermerk))
     kopf = _t("{n} Treffer fuer '{query}'{in_marke}{hinweis}",
               n=len(lines), query=query, in_marke=in_marke, hinweis=hinweis)
-    if zurueckgehalten:
+    if zurueckgehalten and ARCHIV:
+        kopf += _t(', {n} Spuren/Verworfene ausgeblendet (art="spur,verworfen")', n=zurueckgehalten)
+    elif zurueckgehalten:
         kopf += _t(', {n} in der Chronik ausgeblendet (art="verlauf")', n=zurueckgehalten)
     if not voll:
         kopf += _t(' - Vorschau, Volltext per zeige("{ids}")',
@@ -2554,7 +2692,7 @@ def zeige(ids: str, voll: bool = False) -> str:
     return text + "\n\n" + kopf + "\n" + "\n".join(rest)
 
 
-@server.tool()
+@_schreibend
 def einordnen(ids: str, art: str) -> str:
     """Sets the kind of knowledge for existing entries.
 
@@ -2676,10 +2814,131 @@ if _en():
     _englisch_einrichten()
 _schema_entrumpeln()
 
+
+def _messbuch_einrichten() -> None:
+    """`--messbuch`: statt des Gedaechtnisses das Messbuch anbieten (messbuch.py).
+
+    Eigene Datei, eigene Werkzeuge; memory.db wird in dieser Betriebsart nie
+    geoeffnet. Derselbe Kniff wie bei `_englisch_einrichten`: messbuch.py
+    importiert `memory_server`, und das ist hier `__main__`.
+    """
+    sys.modules.setdefault("memory_server", sys.modules[__name__])
+    import messbuch
+    messbuch.anmelden(server)
+    _schema_entrumpeln()
+
+
+# Was im Archiv an den Werkzeugbeschreibungen anders ist. Ersetzt wird je
+# Werkzeug die erste Zeile und je Parameter sein Absatz (`_absatz_ersetzen`),
+# der Rest - Suchkaskade, Vorschau, Abloesen - gilt im Archiv genauso.
+_ARCHIV_TEXTE = {
+    "de": {
+        "remember": ("Stores one literature entry in the shared archive.\n\n"
+                     "One entry = one source with one finding, as lines: Zitat (authors, year,\n"
+                     "title, venue/arXiv), Link + whether it was opened, Aufgabe/Verfahren,\n"
+                     "Befund, Bezug (which project, why), Belegstaerke (Volltext / Abstract /\n"
+                     "unbestaetigt). Reports similar entries AND entries citing the same\n"
+                     "source (arXiv number, DOI, link) - extend or supersede those instead of\n"
+                     "adding a duplicate from another project.", {
+            "tags": "Topic first (e.g. int8-training), then the project that found it.\n"
+                    "        Topics are what other projects search by.",
+            "art": "exactly one of: befund (what a paper measured/showed), methode\n"
+                   "        (a technique worth adopting), ueberblick (survey, entry point to\n"
+                   "        a field), werkzeug (code, dataset, benchmark), luecke (searched,\n"
+                   "        nowhere measured), spur (unchecked lead, source not opened),\n"
+                   "        verworfen (checked and rejected: invented, wrong id). spur and\n"
+                   "        verworfen are hidden from recall's default view."}),
+        "recall": ("Searches the shared literature archive (full text), best matches first.", {
+            "art": "Restrict to kinds, e.g. \"befund,methode\". Possible values:\n"
+                   "        befund (finding), methode (method), ueberblick (survey), werkzeug\n"
+                   "        (code/dataset), luecke (nowhere measured), spur (unchecked lead),\n"
+                   "        verworfen (checked, rejected), gemischt (not yet classified), alle\n"
+                   "        (all). Default: everything except spur and verworfen."}),
+        "einordnen": (None, {
+            "art": "Exactly one of: befund, methode, ueberblick, werkzeug, luecke,\n"
+                   "        spur, verworfen. \"gemischt\" undoes the classification."}),
+    },
+    "en": {
+        "remember": ("Stores one literature entry in the shared archive.\n\n"
+                     "One entry = one source with one finding, as lines: citation (authors,\n"
+                     "year, title, venue/arXiv), link + whether it was opened, task/method,\n"
+                     "finding, relevance (which project, why), evidence (full text /\n"
+                     "abstract / unconfirmed). Reports similar entries AND entries citing\n"
+                     "the same source (arXiv number, DOI, link) - extend or supersede those\n"
+                     "instead of adding a duplicate from another project.", {
+            "tags": "Topic first (e.g. int8-training), then the project that found it.\n"
+                    "        Topics are what other projects search by.",
+            "kind": "exactly one of: finding (what a paper measured/showed), method\n"
+                    "        (a technique worth adopting), survey (entry point to a field),\n"
+                    "        resource (code, dataset, benchmark), gap (searched, nowhere\n"
+                    "        measured), lead (unchecked, source not opened), rejected\n"
+                    "        (checked: invented, wrong id). lead and rejected are hidden\n"
+                    "        from recall's default view."}),
+        "recall": ("Searches the shared literature archive (full text), best matches first.", {
+            "kind": "Restrict to kinds, e.g. \"finding,method\". Possible: finding,\n"
+                    "        method, survey, resource, gap, lead, rejected, unsorted, all.\n"
+                    "        Default: everything except lead and rejected."}),
+        "classify": (None, {
+            "kind": "Exactly one of: finding, method, survey, resource, gap, lead,\n"
+                    "        rejected. \"unsorted\" undoes the classification."}),
+    },
+}
+
+
+def _absatz_ersetzen(text: str, feld: str, neu: str) -> str:
+    """Ersetzt in einer Werkzeugbeschreibung den Absatz eines Parameters unter `Args:`."""
+    # Die Beschreibung steht eingerueckt-bereinigt da: Parameter auf 4, Folgezeilen auf 8.
+    muster = re.compile(rf"(\n {{4}}{feld}: ).*?(?=\n {{4}}\w+: |\n\s*$|$)", re.S)
+    assert muster.search(text), f"Parameter {feld} nicht in der Beschreibung"
+    return muster.sub(lambda m: m.group(1) + neu, text, count=1)
+
+
+def _archiv_einrichten() -> None:
+    """`--archiv`: dieselben Werkzeuge als gemeinsames Literaturarchiv.
+
+    Eigene Datei (ARCHIVE_DB, sonst archive.db), eigene Arten, fester Name an
+    jeder Nummer, Quellenabgleich beim Speichern. Muss vor dem ersten Zugriff
+    auf die Datei laufen - die Arten gehen beim Oeffnen ins Vokabular.
+    """
+    global ARCHIV, DB_PATH, NAME, ARTEN, STUMM, ARTEN_EN, _ART_EIN, LAENGE_HINWEIS
+    ARCHIV = True
+    DB_PATH = _db_pfad(datei="archive.db", umgebung="ARCHIVE_DB")
+    NAME = (os.environ.get("ARCHIVE_NAME") or ("archive" if _en() else "archiv")).strip().lower()
+    ARTEN, STUMM, LAENGE_HINWEIS = ARTEN_ARCHIV, STUMM_ARCHIV, LAENGE_HINWEIS_ARCHIV
+    ARTEN_EN = ARTEN_EN_ARCHIV
+    _ART_EIN = {en: de for de, en in ARTEN_EN.items()} | {"all": "alle"}
+    server._lowlevel_server.instructions = ANWEISUNG_ARCHIV_EN if _en() else ANWEISUNG_ARCHIV
+    texte = _ARCHIV_TEXTE["en" if _en() else "de"]
+    for werkzeug in server._tool_manager.list_tools():
+        if werkzeug.name not in texte:
+            continue
+        kopf, felder = texte[werkzeug.name]
+        beschreibung = werkzeug.description
+        if kopf and werkzeug.name == "remember":
+            # Der ganze Vorspann: im Archiv sagt er, wie ein Eintrag aussieht.
+            beschreibung = kopf + beschreibung[beschreibung.index("\n\nArgs:"):]
+        elif kopf:
+            beschreibung = kopf + beschreibung[beschreibung.index("\n\n"):]
+        for feld, neu in felder.items():
+            beschreibung = _absatz_ersetzen(beschreibung, feld, neu)
+        werkzeug.description = beschreibung
+
+
 def main() -> None:
-    """Startpunkt, auch fuer den Befehl `frugal-memory` aus dem Paket."""
-    if "--gast" in sys.argv[1:]:
-        _gast_einrichten()
+    """Startpunkt, auch fuer den Befehl `frugal-memory` aus dem Paket.
+
+    Ohne Schalter das Gedaechtnis; `--archiv` das Literaturarchiv, `--messbuch`
+    das Messbuch - je eine eigene Datei und ein eigener Eintrag beim Client.
+    `--gast` (nur lesen) laesst sich mit `--archiv` verbinden.
+    """
+    argumente = sys.argv[1:]
+    if "--messbuch" in argumente:
+        _messbuch_einrichten()
+    else:
+        if "--archiv" in argumente or "--archive" in argumente:
+            _archiv_einrichten()
+        if "--gast" in argumente:
+            _gast_einrichten()
     server.run(transport="stdio")
 
 

@@ -55,6 +55,10 @@ contradictions surface instead of quietly piling up.
   inside one project, with `marke=`. That filter is hard, so when the best
   match lies outside the project, `recall` names it instead of leaving you
   with a plausible-looking list of the wrong entries.
+- **Two opt-in extensions on the same engine** — a literature archive
+  that all projects share, and a lab notebook for measurement series.
+  Each is its own file and its own server entry; leave them out and
+  nothing changes ([below](#two-opt-in-extensions)).
 - **Opt-in second opinion** — optionally ask any OpenAI-compatible model
   whether two entries contradict each other or just supersede one another.
 - **German by default, English on request** — tool names, messages and
@@ -69,6 +73,10 @@ contradictions surface instead of quietly piling up.
 - Python 3.11+
 - The `mcp` SDK (`requirements.txt`, that's the whole list)
 - SQLite with FTS5 — included in standard CPython builds
+- Tested on Linux, macOS and Windows with Python 3.11 and 3.14: the full
+  test suites plus the installed package, on every push. Day-to-day use
+  so far is on Linux only — reports from macOS and Windows are very
+  welcome as [issues](https://github.com/komakeule57-maker/frugal-memory/issues).
 - Optional, for the fact check only: any OpenAI-compatible endpoint
 
 ## Setup
@@ -185,6 +193,73 @@ claude mcp add memory-b -s project -- \
 `-s project` keeps the three extra tool definitions out of sessions that do
 not need them. The tools are then called `mcp__memory-b__recall` and so on.
 
+## Two Opt-in Extensions
+
+The same server starts in two more modes. Each has its own file, its own
+tools and its own entry in Claude Code; the memory itself is never opened
+in them. Both follow `MEMORY_LANG=en` like the memory does. They grew out
+of daily use with several projects at once and have not been measured
+the way the memory has — they are offered because they made that work
+noticeably easier, not because a number says so.
+
+### Literature archive (`--archiv`)
+
+Papers, datasets and prior work, shared by all projects. The memory
+holds what *you* found out; the archive holds what *others* published,
+and its value lies in the find another project already made.
+
+```bash
+claude mcp add archive -s user -- uvx frugal-memory --archiv
+```
+
+- Same eight tools, other kinds: `befund` (finding), `methode` (method),
+  `ueberblick` (survey), `werkzeug` (code, dataset), `luecke` (searched,
+  nowhere measured), `spur` (unchecked lead) and `verworfen` (checked
+  and rejected — e.g. a citation a language model made up). Leads and
+  rejected entries are hidden from search, like the chronicle in the memory.
+- **The same source is recognized by its id, not its wording.** When
+  `remember` sees an arXiv number, DOI or link that is already in the
+  archive, it says so — two projects rarely describe a paper in the same
+  words. It also asks for the source and the evidence level (full text,
+  abstract, unconfirmed) when they are missing.
+- Every id carries the name `archiv#12` (`archive#12` in English mode),
+  so it is never mistaken for a memory id.
+- File: `archive.db` next to the memory's, or `ARCHIVE_DB`. Several
+  machines can share one archive by starting it over SSH on the machine
+  that holds the file (without `--gast`, so all of them can write).
+
+### Lab notebook (`--messbuch`)
+
+Measurement series as a structure instead of loose entries: question,
+criterion, recipe, numbers, verdict, and what supersedes what. Spread
+over a dozen memory entries, a series loses exactly the things that
+matter — which one is still running without an evaluation, and whether
+the criterion stood before the result.
+
+```bash
+claude mcp add messbuch -s user -- uvx frugal-memory --messbuch
+```
+
+- `reihen()` / `series()` lists open series with what needs a look:
+  *no entry for N days — is the process still running?*, *measurements
+  without result*, *no criterion*. A table across all series of one
+  topic is `reihen(kennung="vision/lr-*", tabelle=True)`.
+- `reihe_anlegen` / `new_series` **before** the first run. The criterion
+  gets a timestamp; after the first measurement it can only change with
+  a reason, and the change stays visible. Without a criterion the only
+  possible verdict is `beobachtung` (observation).
+- `rezept` / `recipe` records the command, code version, seed and
+  machine; `messwerte` / `measurements` one value per row;
+  `ergebnis` / `result` the verdict against the criterion and what
+  follows from it. Nothing is deleted; wrong values are superseded.
+- **Turn it on before your first series.** Entering old series after the
+  fact works (`nachtrag=`, `begonnen=` keep their real dates), but
+  collecting them from scattered notes costs far more tokens than
+  writing each one down when it happens.
+- File: `messbuch.db`, or `MESSBUCH_DB`. Memory ids written into the
+  notebook must carry the memory's name (`laptop#452`): the notebook may
+  be shared by machines whose memories all count from 1.
+
 ## The Eight Tools
 
 | | |
@@ -280,6 +355,12 @@ with the other one. To switch an existing memory, back it up and run
 `MEMORY_LANG=en frugal-memory-nachziehen` once (from a checkout:
 `MEMORY_LANG=en python3 nachziehen.py`).
 
+The two extensions follow the same switch: in English mode the archive's
+kinds are `finding`, `method`, `survey`, `resource`, `gap`, `lead` and
+`rejected`, and the notebook's tools are `series`, `new_series`,
+`edit_series`, `recipe`, `measurements` and `result`, with English
+statuses and verdicts. Their files store the German names, as the memory does.
+
 Not covered by the switch: the fact-check prompt stays German (it is
 calibrated word for word, and adding one sentence once halved its
 accuracy; only its verdicts are shown in English), and so do the import
@@ -293,6 +374,8 @@ script and the measurement reports. The English stemmer is new and has
 | `memory_server.py` | MCP server, eight tools, search cascade, schema, migrations |
 | `morphologie.py` | stemmer and compound splitter (German; small English stemmer for `MEMORY_LANG=en`) |
 | `werkzeuge_en.py` | the English tool surface for `MEMORY_LANG=en` |
+| `messbuch.py` | the lab notebook (`--messbuch`) |
+| `messbuch_en.py` | its English tools and messages |
 | `texte_en.py` | English messages, keyed by the German text |
 | `nachziehen.py` | recomputes the derived columns, the word and tag directories and the chain marks (`frugal-memory-nachziehen` after pip install) |
 | `faktencheck.py` | opt-in second opinion via any OpenAI-compatible model (off unless configured) |
@@ -300,6 +383,7 @@ script and the measurement reports. The English stemmer is new and has
 | `pruefpaare_gebaut.json` | the hand-built and hand-found contradiction pairs |
 | `import_memos.py` | import a folder of markdown notes (`frugal-memory-import` after pip install; see docs/IMPORT.md) |
 | `test_memory.py` | regression net, one case per pitfall (no pytest) |
+| `test_archiv.py`, `test_messbuch.py` | the tests of the two extensions |
 | `skills/frugal-memory/SKILL.md` | working rules for the agent, as a Claude Code skill (in the package too) |
 | `skill_installieren.py` | copies the skill to `~/.claude/skills/` (`frugal-memory-skill` after pip install) |
 | `requirements.txt` | just `mcp>=2.2.0` |

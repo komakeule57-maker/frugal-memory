@@ -1041,7 +1041,11 @@ def test_jedes_skript_laeuft_trocken_gegen_eine_stand_5_datenbank():
         "texte_en.py": "nur die Uebersetzungstabelle, kein Code",
         "werkzeuge_en.py": "duenne Huellen um die Werkzeuge, siehe die _en-Faelle",
         "zg.py": "fremdes Werkzeug (ZeroGit-Sicherung), gehoert nicht zum Projekt",
-        "skill_installieren.py": "kopiert eine Textdatei, kein SQL; siehe test_skill_befehl_*"
+        "skill_installieren.py": "kopiert eine Textdatei, kein SQL; siehe test_skill_befehl_*",
+        "messbuch.py": "eigene Datei (messbuch.db), nie memory.db; geprueft in test_messbuch.py",
+        "messbuch_en.py": "duenne Huellen und Uebersetzungen des Messbuchs, geprueft in test_messbuch.py",
+        "test_messbuch.py": "die Tests des Messbuchs, eigene Wegwerfdateien",
+        "test_archiv.py": "die Tests des Archivs, eigene Wegwerfdateien"
                  " und spricht beim Trockenlauf das Netz an",
         Path(__file__).name: "diese Datei",
     }
@@ -1581,9 +1585,12 @@ def test_db_pfad_arbeitskopie_paket_und_vorgabe():
 # Anweisung an den Client und Skill im Paket
 # ---------------------------------------------------------------------------
 
-def _anweisung_und_werkzeuge(umgebung=None, gast=False):
+def _anweisung_und_werkzeuge(umgebung=None, gast=False, betrieb=""):
     import subprocess
+    ordner = tempfile.mkdtemp(prefix="anwtest-")
+    umgebung = {"ARCHIVE_DB": f"{ordner}/archive.db", "MESSBUCH_DB": f"{ordner}/messbuch.db", **(umgebung or {})}
     probe = ("import json, inspect, memory_server as ms; " + ("ms._gast_einrichten(); " if gast else "")
+             + (f"ms._{betrieb}_einrichten(); " if betrieb else "")
              + "print(json.dumps([ms.server.instructions, {t.name: list(inspect.signature(t.fn).parameters)"
              " for t in ms.server._tool_manager.list_tools()}]))")
     aus = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, check=True,
@@ -1595,9 +1602,9 @@ def _anweisung_und_werkzeuge(umgebung=None, gast=False):
 def test_anweisung_nennt_nur_vorhandene_werkzeuge_und_parameter():
     """Die Anweisung steht in jeder Sitzung - ein Werkzeug- oder Parametername,
     den es nicht gibt, schickte das Modell in jeder Sitzung in einen Fehler."""
-    for umgebung in ({}, {"MEMORY_LANG": "en"}):
-        anweisung, werkzeuge = _anweisung_und_werkzeuge(umgebung)
-        assert anweisung and len(anweisung) <= 700, (umgebung, len(anweisung or ""))
+    for umgebung, betrieb in [(u, b) for u in ({}, {"MEMORY_LANG": "en"}) for b in ("", "archiv", "messbuch")]:
+        anweisung, werkzeuge = _anweisung_und_werkzeuge(umgebung, betrieb=betrieb)
+        assert anweisung and len(anweisung) <= 700, (umgebung, betrieb, len(anweisung or ""))
         aufrufe = re.findall(r"\b(\w+)\(([^)]*)\)", anweisung)
         assert len(aufrufe) >= 3, aufrufe
         for name, argumente in aufrufe:
@@ -1607,7 +1614,7 @@ def test_anweisung_nennt_nur_vorhandene_werkzeuge_und_parameter():
                 assert arg in werkzeuge[name], (umgebung, name, arg)
         for param in re.findall(r"\b(\w+)=\\?\"", anweisung):
             assert any(param in p for p in werkzeuge.values()), (umgebung, param)
-        assert "frugal-memory-skill" in anweisung
+        assert "frugal-memory-skill" in anweisung or betrieb
 
 
 def test_gast_bekommt_keine_anweisung():
