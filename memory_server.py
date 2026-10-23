@@ -3,6 +3,7 @@
 
 import difflib
 import functools
+import inspect
 import math
 import os
 import re
@@ -2913,7 +2914,9 @@ def _archiv_einrichten() -> None:
         if werkzeug.name not in texte:
             continue
         kopf, felder = texte[werkzeug.name]
-        beschreibung = werkzeug.description
+        # Erst ab Python 3.13 entfernt der Compiler die Einrueckung von
+        # Docstrings selbst; vorher steht sie in der Beschreibung.
+        beschreibung = inspect.cleandoc(werkzeug.description)
         if kopf and werkzeug.name == "remember":
             # Der ganze Vorspann: im Archiv sagt er, wie ein Eintrag aussieht.
             beschreibung = kopf + beschreibung[beschreibung.index("\n\nArgs:"):]
