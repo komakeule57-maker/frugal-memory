@@ -183,6 +183,95 @@ scores per hit, and the hit text is only 46–54 % of it — the other half
 is that it sends text for every hit. Not measured: answer quality, and
 an agent that searches more than once.
 
+### Against engram, the Official Example and mcp-memory-service
+
+Measured 2026-10-26 against three lightweight, local memory servers, each
+in its own environment and at its current release: **engram 3.6.0** (Go,
+SQLite FTS5), the **official `@modelcontextprotocol/server-memory` 2.0.0**
+(knowledge graph in a JSON file), and **mcp-memory-service 12.4.0** (Python,
+sqlite-vec, ONNX embeddings with its default model `all-MiniLM-L6-v2`). All
+four, this server included, ran as real MCP servers over stdio and were
+called through their tools by the same client — the way an agent uses
+them. Same benches, same rule as against MemPalace: paired significance
+test, p < 0.05, each opponent judged by its **best** arm. The plan, with
+the criterion, was written before the first run.
+
+**Control first:** through this new client path, this server reproduced
+its earlier figures exactly (89.8 % on LoCoMo, 72.5 % on the German
+questions, read in fresh).
+
+Where a tool offers a choice to the agent in its own description, both
+settings were measured: engram's `match_mode` (default: every word must
+match; or `any`), mcp-memory-service's `mode` (default `semantic`; or
+`hybrid`, which adds BM25 — the plan wrongly assumed `semantic` already
+did, so `hybrid` was added after the first results; it does not change
+the verdict). The official example has no ranking and searches
+the query as one substring; besides the plain call, it was measured with
+one search per word of the question, ranked by how many words hit — an
+agent doing several keyword searches. That variant is my construction, not
+the product.
+
+| | this server | engram | official example | mcp-memory-service |
+|---|---:|---:|---:|---:|
+| LoCoMo, Recall@10, default call | **89.8 %** | 2.7 % | 0.2 % | 51.7 % |
+| LoCoMo, Recall@10, best setting | | 50.7 % (`any`) | 86.6 % (word by word) | 72.3 % (`hybrid`) |
+| 178 German questions, gold among 8, best setting | **72.5 %** | 59.0 % | 64.0 % | 55.1 % |
+| 50 chain first questions, gold among 8, best setting | 54.0 % | 58.0 % | 58.0 % | 66.0 % |
+
+Against each opponent's best setting, this server finds significantly more
+on LoCoMo (+39.1, +3.2 and +17.5 points, all p = 0.0001) and on the 178
+German questions (p ≤ 0.014). On the 50 chain questions no difference is
+significant; there the opponents are ahead.
+
+**Why the gaps are this large — read in their source, then checked:**
+
+- **engram** switches from its FTS5 search to a `LIKE` search **sorted by
+  date, not relevance** whenever the query contains a word shorter than
+  three characters. That is 1,492 of the 1,986 LoCoMo questions ("to", "a",
+  "do"), but only 24 of the 178 German ones. With those short words removed
+  before the call (a diagnostic arm, not counted), engram reaches **87.1 %**
+  on LoCoMo — still 2.7 points behind, a significant gap — and ties on
+  the German questions. **engram's actual search is in the same
+  league;** most of the gap comes from that switch. Its default, every word
+  must match, returns nothing for most natural questions (126 of 178 empty).
+- **The official example** matches the whole query as a substring, so a
+  question almost never finds anything. Asked word by word it gets close,
+  at about six calls and 253 ms per question, with no ranking to speak of.
+- **mcp-memory-service** rejected **29 of 272 LoCoMo sessions (11 %)** and
+  11 of 1,593 German entries as semantic duplicates; what is rejected
+  cannot be found. Its default model reads only the first 256 word pieces
+  of a text, while a LoCoMo session has 2,783 characters in the median.
+  Keyword search runs only with `mode="hybrid"`. And a plain
+  `pip install mcp-memory-service` lacks `onnxruntime`, so the server
+  silently falls back to "hash embeddings (reduced quality)"; it was
+  measured with the `[sqlite]` extra its README's local setup implies.
+
+**Resources** — measured on a 2-core laptop, every call through MCP, so the
+times are not comparable with the MemPalace table above (direct function
+calls on a 12-core machine):
+
+| | this server | engram | official example | mcp-memory-service |
+|---|---:|---:|---:|---:|
+| search, median round trip | **15 ms** | 36 ms | 33 ms | 57 ms |
+| peak memory of the server process | 91 MB | **37 MB** | 230 MB | 303 MB |
+| ingesting 1,593 entries | 306 s | 251 s | **140 s** | 779 s |
+| on disk | 6.2 MB | 18.6 MB | **1.8 MB** | 21.9 MB |
+| cold start to first result | 2.4 s | **0.1 s** | 0.7 s | 3.8 s |
+| install | 54 MB | 22 MB | **15 MB** (without Node.js) | 451 MB (incl. model) |
+
+So this server is leaner in **every** respect only than mcp-memory-service.
+engram, a single Go binary, is smaller, starts twenty times faster and uses
+less memory; the official example is the smallest install and file. This
+server searches fastest. Its slower ingest is the stemming and compound
+splitting done at write time, and its cold start was measured from a
+development environment.
+
+What this does not cover: answer quality, tokens per answer, and tuned
+setups — mcp-memory-service with a multilingual model, engram with titles
+written by an agent (here: the first line of each text). engram and
+mcp-memory-service do far more than search (sessions, timelines,
+consolidation, sync); only the core all four share was compared.
+
 ### Preview vs. Full Text
 
 14 realistic questions against 984 entries, 5 runs each after warm-up:
