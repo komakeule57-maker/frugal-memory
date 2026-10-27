@@ -7,12 +7,12 @@
     "url": "https://github.com/komakeule57-maker/frugal-memory",
     "source": "github"
   },
-  "version": "0.2.2",
+  "version": "0.2.3",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "frugal-memory",
-      "version": "0.2.2",
+      "version": "0.2.3",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
