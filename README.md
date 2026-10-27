@@ -175,6 +175,11 @@ Claude Code loads the skill's full text only when the memory comes up;
 until then only its one-line description sits in context. An existing
 `SKILL.md` that differs is left alone unless you add `--force`.
 
+A third layer is up to you: a few lines in `CLAUDE.md`, for what neither
+layer can say — mainly that the server, not Claude Code's own memory
+files, is where knowledge goes. An optional block to copy is in
+[docs/CLAUDE-MD.md](https://github.com/komakeule57-maker/frugal-memory/blob/main/docs/CLAUDE-MD.md).
+
 ### Reading another machine's memory
 
 Each machine keeps its own memory, and each numbers its entries from 1. A
@@ -336,6 +341,7 @@ see [The Ranking Fix, Corrected Twice](https://github.com/komakeule57-maker/frug
 | [docs/MEASUREMENTS.md](https://github.com/komakeule57-maker/frugal-memory/blob/main/docs/MEASUREMENTS.md) | what was measured, and the known limitations |
 | [docs/FACTCHECK.md](https://github.com/komakeule57-maker/frugal-memory/blob/main/docs/FACTCHECK.md) | the opt-in fact check: setup, what it can and cannot do |
 | [docs/IMPORT.md](https://github.com/komakeule57-maker/frugal-memory/blob/main/docs/IMPORT.md) | importing an existing folder of notes, and the damage that did |
+| [docs/CLAUDE-MD.md](https://github.com/komakeule57-maker/frugal-memory/blob/main/docs/CLAUDE-MD.md) | an optional block to copy into your `CLAUDE.md` |
 | [`messung/`](https://github.com/komakeule57-maker/frugal-memory/tree/main/messung/) | the eight underlying measurement reports (mostly German) |
 
 ## A Note on Language
