@@ -46,7 +46,8 @@ contradictions surface instead of quietly piling up.
   existing entries and which numbers changed, so you can supersede
   instead of accumulate.
 - **Nothing is ever deleted** — superseded entries drop out of the default
-  view and stay findable, with a note on why and by what.
+  view and stay findable, with a note on why and by what. One switch
+  brings them back if that was a mistake.
 - **Browsing, not just searching** — `themen()` lists projects and a
   project's newest title lines for when you have forgotten the words to
   search for. Capped like everything else: one page, and a line saying how
@@ -268,7 +269,7 @@ claude mcp add messbuch -s user -- uvx frugal-memory --messbuch
 | `recall(query, limit, art, marke, …)` | ranked full-text search, preview by default; under `marke=` it names a better match outside the project |
 | `zeige(ids, voll)` | full text of specific entries, about 6000 characters per call; what doesn't fit is listed with the call that fetches it |
 | `themen(marke, limit, seite, alle)` | browse: which projects exist, or one project's title lines, newest first, a page at a time |
-| `vergessen(ids, grund)` | mark as outdated — never deletes |
+| `vergessen(ids, grund, rueckgaengig)` | mark as outdated — never deletes; `rueckgaengig=True` brings entries back |
 | `einordnen(ids, art)` | assign the knowledge kind of existing entries |
 | `verdichten(marke, art, …)` | find groups of entries that say much the same thing |
 | `pruefe(ids)` | opt-in: have a language model judge contradiction vs. newer state |
@@ -339,7 +340,7 @@ German compounds.
 
 - the tools are `remember(text, tags, kind, supersedes)`,
   `recall(query, limit, kind, tag, full, include_superseded)`, `show(ids, full)`,
-  `topics(tag, limit, page, all)`, `forget(ids, reason)`, `classify(ids, kind)`,
+  `topics(tag, limit, page, all)`, `forget(ids, reason, undo)`, `classify(ids, kind)`,
   `consolidate(tag, kind, threshold, groups)` and `check(ids)`,
 - the kinds are `interface`, `pitfall`, `decision`, `measurement`,
   `workflow`, `history`, `unsorted`,

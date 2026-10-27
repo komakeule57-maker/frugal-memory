@@ -413,6 +413,60 @@ def test_zweimaliges_abloesen_gibt_zwei_vermerke():
     assert (durch, grund) == (2, "ersetzt"), (durch, grund)
 
 
+def test_rueckgaengig_holt_vergessenes_und_abgeloestes_zurueck():
+    """Glama (2026-10-23): ein versehentliches `vergessen` liess sich nur durch
+    Neuspeichern beheben - mit neuer Nummer und neuem Datum. Der Schalter holt
+    den Eintrag selbst zurueck; die Vermerke wandern ab, statt zu verschwinden."""
+    ms.remember("Der Wasserhahn tropft im Keller.", tags="haus", art="fallstrick")
+    ms.remember("Die Heizung braucht im Herbst Entlueftung.", tags="haus", art="arbeitsweise")
+    ms.vergessen("1", grund="versehen")
+    ms.vergessen("1", grund="nochmal")
+    ms.remember("Die Heizung wird im Oktober entlueftet.", tags="haus", art="arbeitsweise",
+                ersetzt="2")
+    assert "Keine Treffer" in ms.recall("Wasserhahn")
+
+    aus = ms.vergessen("1,2,3,99", rueckgaengig=True)
+    assert "Wieder sichtbar: #1, #2" in aus, aus
+    assert "#2 war durch #3 abgeloest" in aus, aus
+    assert "Nicht veraltet: #3" in aus and "#99" not in aus, aus
+    assert "#1 " in ms.recall("Wasserhahn") and "VERALTET" not in ms.zeige("1,2")
+
+    conn = ms._connect()
+    try:
+        assert conn.execute("SELECT count(*) FROM veraltet").fetchone()[0] == 0
+        verlauf = conn.execute(
+            "SELECT id, grund FROM veraltet_aufgehoben ORDER BY vermerk").fetchall()
+    finally:
+        conn.close()
+    assert verlauf == [(1, "versehen"), (1, "nochmal"), (2, "ersetzt")], verlauf
+
+    assert ms.vergessen("3", rueckgaengig=True) == "Nicht veraltet: #3"
+    assert ms.vergessen("99", rueckgaengig=True).startswith("Keine passenden Ids")
+    assert ms.vergessen("1", grund="jetzt wirklich").startswith("Als veraltet markiert: #1")
+    assert "Keine Treffer" in ms.recall("Wasserhahn")
+
+
+def test_rueckgaengig_traegt_verwaiste_marke_wieder_ein():
+    """nachziehen.py nimmt Marken aus dem Verzeichnis, die nur noch veraltete
+    Eintraege tragen. Kommt der Eintrag zurueck, muss seine Marke mit, sonst
+    warnt `remember` beim naechsten Mal vor einer angeblich neuen Marke."""
+    ms.remember("Das Boot liegt im Winter in der Halle.", tags="segeln", art="arbeitsweise")
+    ms.vergessen("1")
+    conn = ms._connect()
+    try:
+        ms._marken_nachtragen(conn)
+        conn.commit()
+        assert not conn.execute("SELECT 1 FROM marken WHERE marke = 'segeln'").fetchone()
+    finally:
+        conn.close()
+    ms.vergessen("1", rueckgaengig=True)
+    conn = ms._connect()
+    try:
+        assert conn.execute("SELECT 1 FROM marken WHERE marke = 'segeln'").fetchone()
+    finally:
+        conn.close()
+
+
 def test_gezieltes_woerterbuch_ist_so_gut_wie_das_ganze():
     """#1455: `_vokabular` holt nur noch die Teilzeichenketten, die `zerlege`
     fuer DIESEN Text nachschlagen kann, statt das ganze Woerterbuch zu lesen.
@@ -1491,6 +1545,7 @@ def test_en_werkzeuge_sprechen_englisch_und_finden_gebeugt():
         assert "Tag" in en.topics() and "No entries under the tag" in en.topics("spacship")
         assert "Marked as superseded: #2" in en.forget("2", reason="obsolete")
         assert "SUPERSEDED: obsolete" in en.recall("restarts", include_superseded=True)
+        assert en.forget("2", undo=True) == "Visible again: #2"
         assert en.classify("1", kind="decision").startswith("decision: #1")
     with sqlite3.connect(ms.DB_PATH) as conn:
         assert conn.execute("SELECT art FROM eintrag WHERE id = 1").fetchone()[0] == "entscheidung"

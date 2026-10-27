@@ -142,7 +142,7 @@ def check(ids: str) -> str:
     return ms.pruefe(ids)
 
 
-def forget(ids: str, reason: str = "") -> str:
+def forget(ids: str, reason: str = "", undo: bool = False) -> str:
     """Marks entries as superseded, without a replacement.
 
     They disappear from recall's default view but remain findable with
@@ -151,8 +151,9 @@ def forget(ids: str, reason: str = "") -> str:
     Args:
         ids: One or more entry ids, e.g. "12,34".
         reason: Why - shown later next to the superseded entry.
+        undo: True brings superseded entries back.
     """
-    return ms.vergessen(ids, grund=reason)
+    return ms.vergessen(ids, grund=reason, rueckgaengig=undo)
 
 
 def classify(ids: str, kind: str) -> str:

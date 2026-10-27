@@ -107,6 +107,10 @@ TEXTE_EN = {
     # --- forget / classify
     "Keine passenden Ids gefunden - nichts geaendert.":
         "No matching ids found - nothing changed.",
+    "Wieder sichtbar: {ids}": "Visible again: {ids}",
+    "#{id} war durch #{durch} abgeloest - beide gelten jetzt.":
+        "#{id} was superseded by #{durch} - both count now.",
+    "Nicht veraltet: {ids}": "Not superseded: {ids}",
     "Fehler: genau eine Art angeben. Moeglich: {arten}, {unsortiert} (nimmt die Einordnung zurueck).":
         "Error: give exactly one kind. Possible: {arten}, {unsortiert} (undoes the classification).",
     "Fehler: keine Id angegeben.": "Error: no id given.",

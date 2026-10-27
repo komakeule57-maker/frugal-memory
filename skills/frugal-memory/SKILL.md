@@ -102,6 +102,7 @@ numbers differ ("Zahlen 186 -> 242"). That is the moment to decide:
 - Both are true side by side → leave them.
 
 Nothing is ever deleted; retired entries stay findable with their reason.
+Retired one by mistake? `vergessen("12", rueckgaengig=True)` brings it back.
 
 Put dates in the text when they matter. Timestamps are when the entry was
 written, not when the thing happened.

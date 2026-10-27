@@ -128,11 +128,17 @@ is skipped. That leaves roughly 117,000 pairs and ~3 s across the whole
 dataset.
 
 
-## `vergessen(ids, grund="")`
+## `vergessen(ids, grund="", rueckgaengig=False)`
 
 Marks entries as outdated. **Nothing is ever deleted** — they only
 disappear from the default view and remain findable with
 `mit_veraltet=True`, along with a note of why and what replaced them.
+
+`rueckgaengig=True` takes it back: the entries return to the default view
+with their old id and date. This works for superseded entries too; the
+answer then says that both the old and the new entry count again. The
+notes of the undone retirement are not deleted either, they move to the
+table `veraltet_aufgehoben`.
 
 ## `recall(query, limit=8, art="", marke="", voll=False, mit_veraltet=False)`
 

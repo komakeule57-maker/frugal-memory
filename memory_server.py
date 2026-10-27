@@ -272,7 +272,7 @@ _TRENNER = re.compile(r"[\s,]+")
 
 # Die einzige Stelle mit der Versionsnummer: pyproject.toml liest sie von hier,
 # und der Server meldet sie jedem Client beim Verbinden (serverInfo).
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 # Die Arbeitsregeln in Kurzform. Claude Code legt sie jeder Sitzung bei, in
 # der der Server eingebunden ist - auch dort, wo nur `uvx frugal-memory`
@@ -623,6 +623,14 @@ def _nebentabellen(conn: sqlite3.Connection) -> None:
         " id INTEGER NOT NULL, durch INTEGER, am TEXT, grund TEXT)"
     )
     conn.execute("CREATE INDEX IF NOT EXISTS veraltet_nach_id ON veraltet(id)")
+    # Zurueckgenommene Vermerke (`vergessen(..., rueckgaengig=True)`). Sie
+    # wandern hierher, statt geloescht zu werden: so bleibt `veraltet` der
+    # eine Ort, den jede Suche fragt, und die Herkunft trotzdem erhalten.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS veraltet_aufgehoben ("
+        " vermerk INTEGER PRIMARY KEY, id INTEGER NOT NULL, durch INTEGER,"
+        " am TEXT, grund TEXT, aufgehoben_am TEXT NOT NULL)"
+    )
     # Verzeichnis der vergebenen Marken. Die Marke bleibt Freitext - erzwingen
     # laesst sie sich nicht, ohne neue Projekte zu verbieten. Aber sie zerfaellt
     # unbemerkt (#1418), und dagegen haelt `remember` jede neue dagegen.
@@ -1577,6 +1585,31 @@ def _veralten(conn, ids: str, durch=None, grund="") -> list:
     return getan
 
 
+def _aufheben(conn, ids: str) -> tuple:
+    """Nimmt die Veraltung zurueck: ([(id, durch, grund)], [nicht veraltet]).
+
+    Alle Vermerke einer Id wandern nach `veraltet_aufgehoben` - mit nur dem
+    juengsten bliebe der Eintrag ueber einen aelteren weiter versteckt.
+    """
+    stand = _veraltungen(conn)
+    getan, lebend = [], []
+    for i in _ids(ids):
+        if i not in stand:
+            if conn.execute("SELECT 1 FROM eintrag WHERE id = ?", (i,)).fetchone():
+                lebend.append(i)
+            continue
+        conn.execute(
+            "INSERT INTO veraltet_aufgehoben (vermerk, id, durch, am, grund, aufgehoben_am)"
+            " SELECT vermerk, id, durch, am, grund, datetime('now') FROM veraltet WHERE id = ?",
+            (i,),
+        )
+        conn.execute("DELETE FROM veraltet WHERE id = ?", (i,))
+        tags = conn.execute("SELECT tags FROM eintrag WHERE id = ?", (i,)).fetchone()[0]
+        _marken_eintragen(conn, tags or "")
+        getan.append((i, *stand[i]))
+    return getan, lebend
+
+
 def _veraltungen(conn) -> dict:
     """Je veraltetem Eintrag der JUENGSTE Vermerk: {id: (durch, grund)}."""
     return {
@@ -1956,7 +1989,7 @@ def pruefe(ids: str) -> str:
 
 
 @_schreibend
-def vergessen(ids: str, grund: str = "") -> str:
+def vergessen(ids: str, grund: str = "", rueckgaengig: bool = False) -> str:
     """Marks entries as outdated, without a replacement.
 
     They disappear from recall's default view but remain findable with
@@ -1965,6 +1998,7 @@ def vergessen(ids: str, grund: str = "") -> str:
     Args:
         ids: One or more entry ids, e.g. "12,34".
         grund: Why - appears later in the display of outdated entries.
+        rueckgaengig: True brings outdated or superseded entries back.
     """
     try:
         _ids(ids)
@@ -1972,10 +2006,27 @@ def vergessen(ids: str, grund: str = "") -> str:
         return _t("Fehler: {exc}", exc=exc)
     conn = _connect()
     try:
-        getan = _veralten(conn, ids, grund=grund.strip() or _t("veraltet"))
+        if rueckgaengig:
+            zurueck, lebend = _aufheben(conn, ids)
+        else:
+            getan = _veralten(conn, ids, grund=grund.strip() or _t("veraltet"))
         conn.commit()
     finally:
         conn.close()
+    if rueckgaengig:
+        if not zurueck and not lebend:
+            return _t("Keine passenden Ids gefunden - nichts geaendert.")
+        aus = []
+        if zurueck:
+            aus.append(_t("Wieder sichtbar: {ids}",
+                          ids=", ".join("#" + str(i) for i, _, _ in zurueck)))
+        for i, durch, _ in zurueck:
+            if durch:
+                aus.append(_t("#{id} war durch #{durch} abgeloest - beide gelten jetzt.",
+                              id=i, durch=durch))
+        if lebend:
+            aus.append(_t("Nicht veraltet: {ids}", ids=", ".join("#" + str(i) for i in lebend)))
+        return "\n".join(aus)
     if not getan:
         return _t("Keine passenden Ids gefunden - nichts geaendert.")
     return _t("Als veraltet markiert: {ids}", ids=", ".join("#" + str(i) for i in getan))
