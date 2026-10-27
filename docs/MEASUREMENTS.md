@@ -50,6 +50,18 @@ In real tokens (2026-09-25) it is **2,359 against 11,319 per question,
 results, `.md` files, previews and full texts all come to 1.87–1.90
 characters per token, so the factor cancels out.
 
+**B is the naive case, on purpose.** It models an agent that opens the
+files `grep` found with `Read`, which loads a file whole, and that is
+where B's cost comes from (see the token measurement: searching costs
+250 to 900 tokens on both paths, reading makes the difference). A careful
+agent that reads only the matching lines with a few lines of context
+(`grep -C`) would pay less, and that variant is **not measured** here. The
+closest measured stand-in is `grep -n` in the next section: matching lines
+without context, median 13.0 KB against 4.4 KB for `recall` (still full
+text then, before the preview), on an older bench of 898 entries and 14
+questions. Whether a few lines of context are enough to answer is a
+separate question that this bench cannot judge.
+
 **The gap grew with the dataset.** A stayed flat (+7.7 %, a tie) while
 the dataset grew by half, because the preview is capped at eight lines. B
 grew with it, because `grep` does: 64 matching files per question in the
