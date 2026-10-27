@@ -30,6 +30,14 @@ messung/*.py
 messung/*.json
 messung/korpus_*/
 messung/*.db
+messung/*.db-*
+messung/*.bak
+# Unterordner einer Messung (seit 2026-10-18 je Messung einer): dort liegen
+# Skripte, Rohdaten, Logs, Wegwerf-Datenbanken und gepatchte Kopien des
+# Servers. Alles ausgeblendet; was veroeffentlicht wird (PLAN.md,
+# ERGEBNIS.md), kommt bewusst per `git add -f` dazu und ist danach normal
+# versioniert.
+messung/*/
 
 # Lokales Deployment-Werkzeug samt Zugangsdatei. Hat mit diesem Projekt nichts
 # zu tun und traegt ein API-Token - nie hier committen.
@@ -45,3 +53,6 @@ migration_zeitstempel.py
 build/
 dist/
 *.egg-info/
+
+# Entwuerfe fuer Beitraege ausserhalb des Repos (PR-Texte, Posts) - privat.
+entwurf_*.md

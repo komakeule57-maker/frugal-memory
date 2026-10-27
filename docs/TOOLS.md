@@ -127,7 +127,10 @@ occurs in more than 5 % of entries, or in more than 25, connects
 everything to everything and is skipped. Without the fixed 25 the number
 of pairs still grew roughly quadratically: at 1,593 entries 509,500 pairs
 and 61 s on a two-core laptop, with it 147,941 pairs and 19 s, finding the
-same pairs (measured in `messung/verdichten_deckel_2026-10-27/`).
+same pairs. Most of the rest went into summing the weights of both entries
+for every pair; computed once per entry instead, it is 5 s, with output
+identical to the character (measured in `messung/verdichten_deckel_2026-10-27/`
+and `messung/verdichten_vereinigung_2026-10-27/`).
 
 
 ## `vergessen(ids, grund="", rueckgaengig=False)`

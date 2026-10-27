@@ -1879,11 +1879,14 @@ def verdichten(marke: str = "", art: str = "alle", schwelle: float = 0.5, gruppe
                 for b in ids[i + 1:]:
                     kandidaten.add((a, b) if a < b else (b, a))
 
+    # Die Vereinigung nicht je Paar neu summieren: |A u B| = |A| + |B| - |A n B|.
+    # Das war rund 60 % der Laufzeit; vorgerechnet 5,2 statt 18,6 s bei 1.593
+    # Eintraegen, dieselben Paare (messung/verdichten_vereinigung_*).
+    summe = {rid: sum(gew.get(s, 0) for s in st) for rid, st in staemme.items()}
     paare = []
     for a, b in kandidaten:
-        sa, sb = staemme[a], staemme[b]
-        gemeinsam = sum(gew.get(s, 0) for s in sa & sb)
-        vereint = sum(gew.get(s, 0) for s in sa | sb)
+        gemeinsam = sum(gew.get(s, 0) for s in staemme[a] & staemme[b])
+        vereint = summe[a] + summe[b] - gemeinsam
         if vereint and gemeinsam / vereint >= schwelle:
             paare.append((gemeinsam / vereint, a, b))
     if not paare:
