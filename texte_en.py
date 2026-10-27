@@ -82,8 +82,8 @@ TEXTE_EN = {
     '\nZum Verdichten: neuen Eintrag schreiben und die alten per remember(..., ersetzt="...") abloesen.':
         '\nTo consolidate: write a new entry and supersede the old ones via remember(..., supersedes="...").',
     # --- check
-    "Kein Faktencheck-Modul vorhanden (faktencheck.py fehlt oder ist fehlerhaft).":
-        "No fact-check module available (faktencheck.py missing or broken).",
+    "Kein Faktencheck-Modul vorhanden (faktencheck.py fehlt oder ist fehlerhaft: {fehler}).":
+        "No fact-check module available (faktencheck.py is missing or broken: {fehler}).",
     'Fehler: mindestens zwei Ids noetig, z.B. pruefe("249,255").':
         'Error: at least two ids needed, e.g. check("249,255").',
     "Zu wenige vorhandene Eintraege: {ids} gibt es nicht.":
@@ -131,6 +131,11 @@ TEXTE_EN = {
         ', {n} hidden in history (kind="history")',
     ' - Vorschau, Volltext per zeige("{ids}")':
         ' - preview, full text via show("{ids}")',
+    ' - Volltext bis {deckel} Zeichen, die letzten {n} als Vorschau: zeige("{ids}")':
+        ' - full text up to {deckel} characters, the last {n} as preview: show("{ids}")',
+    "#{zahl} ist keine gueltige Nummer.": "#{zahl} is not a valid number.",
+    "Diese Datenbank steht auf Schemastand {stand}, dieser Server kennt nur bis {soll}. Sie wurde mit neuerem Code benutzt - den Server aktualisieren, dann wieder hier.":
+        "This database is at schema version {stand}, this server only knows up to {soll}. It was used with newer code - update the server, then come back.",
     " (+ schon einmal so gesucht)": " (+ searched like this before)",
     " (ODER - kein Eintrag enthaelt alle Begriffe)":
         " (OR - no entry contains all terms)",

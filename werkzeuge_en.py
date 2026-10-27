@@ -63,7 +63,7 @@ def recall(
             "lighthouse" also matches "lighthouse-project", but
             "mcp-memory-server" does not match "mcp-memory". topics() lists
             which tags exist.
-        full: Full text instead of preview (default: no).
+        full: Full text instead of preview (default: no), capped like show.
         include_superseded: Also show superseded entries (default: no).
     """
     return ms.recall(query, limit=limit, art=kind, marke=tag, voll=full,

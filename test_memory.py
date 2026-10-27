@@ -467,6 +467,72 @@ def test_rueckgaengig_traegt_verwaiste_marke_wieder_ein():
         conn.close()
 
 
+def test_recall_voll_steht_unter_dem_deckel():
+    """Audit 2026-10-27: 50 Treffer mit voll=True lieferten 292.264 Zeichen,
+    die Vorschau 8.152 und zeige mit denselben Ids 14.025. Das README
+    verspricht aber, dass jede Antwort gedeckelt ist."""
+    for i in range(30):
+        ms.remember(f"Kaffeemaschine Wartung {i}. " + "Entkalken und Bruehgruppe reinigen. " * 60,
+                    tags="haushalt", art="arbeitsweise")
+    aus = ms.recall("Kaffeemaschine", limit=30, voll=True)
+    assert len(aus) < ms.DECKEL_ZEIGE + 30 * 200, len(aus)
+    assert "als Vorschau: zeige(" in aus.splitlines()[0], aus.splitlines()[0]
+    assert "Entkalken und Bruehgruppe reinigen. " * 10 in aus      # der erste kommt ganz
+
+    ms.remember("Riesig: " + "Zeile mit Inhalt fuer den Deckel.\n" * 400, tags="gross", art="arbeitsweise")
+    einer = ms.recall("Riesig", voll=True, marke="gross")
+    assert "gekuerzt:" in einer and len(einer) < ms.DECKEL_ZEIGE + 400, len(einer)
+
+
+def test_neuerer_schemastand_wird_nicht_still_zurueckgesetzt():
+    """Audit 2026-10-27: ein recall setzte Stand 7 still auf 6 zurueck. Ein
+    alter Server auf neuerer Datei muss ablehnen, wie es der Gast schon tut."""
+    ms.remember("Etwas", tags="probe", art="fallstrick")
+    with sqlite3.connect(ms.DB_PATH) as conn:
+        conn.execute("UPDATE schema SET wert = ? WHERE schluessel = 'stand'",
+                     (str(ms.SCHEMA_STAND + 1),))
+    try:
+        ms.recall("Etwas")
+    except RuntimeError as fehler:
+        assert "Schemastand" in str(fehler), fehler
+    else:
+        raise AssertionError("neuerer Schemastand wurde nicht abgelehnt")
+    with sqlite3.connect(ms.DB_PATH) as conn:
+        stand = conn.execute("SELECT wert FROM schema WHERE schluessel = 'stand'").fetchone()[0]
+    assert int(stand) == ms.SCHEMA_STAND + 1, stand
+
+
+def test_anfuehrungszeichen_in_der_marke():
+    """Audit 2026-10-27: ein einzelnes " in tags liess remember nichts
+    speichern, recall(marke=) meldete eine ungueltige Anfrage und
+    verdichten warf einen rohen OperationalError."""
+    aus = ms.remember("Der Monitor hat 27 Zoll.", tags='5" display', art="schnittstelle")
+    assert aus.startswith("Gespeichert #1"), aus
+    assert "#1 " in ms.recall("Monitor", marke='5" display')
+    assert "Keine Treffer" in ms.recall("Monitor", marke='a"b')
+    ms.verdichten(marke='a"b')
+
+
+def test_riesige_id_gibt_eine_meldung():
+    """Audit 2026-10-27: eine Id ueber dem SQLite-Bereich warf OverflowError."""
+    ms.remember("Etwas", tags="probe", art="fallstrick")
+    for aufruf in (ms.zeige, ms.vergessen):
+        aus = aufruf("99999999999999999999")
+        assert "keine gueltige Nummer" in aus, aus
+
+
+def test_schema_entrumpeln_verhindert_den_start_nicht():
+    """_tool_manager ist ein privates Attribut des SDK. Faellt es weg, bleiben
+    die Titel stehen - der Server muss trotzdem starten."""
+    echt = ms.server
+    ms.server = object()
+    try:
+        with contextlib.redirect_stderr(io.StringIO()):
+            assert ms._schema_entrumpeln() == 0
+    finally:
+        ms.server = echt
+
+
 def test_gezieltes_woerterbuch_ist_so_gut_wie_das_ganze():
     """#1455: `_vokabular` holt nur noch die Teilzeichenketten, die `zerlege`
     fuer DIESEN Text nachschlagen kann, statt das ganze Woerterbuch zu lesen.
