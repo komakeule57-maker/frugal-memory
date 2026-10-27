@@ -14,10 +14,13 @@ Measured over 275 real questions from 89 working sessions: **2,359 tokens
 per answered question, against 11,319** for the usual one markdown file
 per fact, found with `grep` and read whole. That baseline is the naive case
 on purpose: it is what happens when the file is opened with `Read`, which
-loads it whole. An agent that only reads `grep`'s matching lines pays less;
-that path was measured only on a smaller, older bench, at a median of
-13.0 KB against 4.4 KB for what `recall` returned then
-([details](https://github.com/komakeule57-maker/frugal-memory/blob/main/docs/MEASUREMENTS.md#search-against-grep)).
+loads it whole. The careful path, `grep -C` with three lines of context,
+turned out more expensive, not cheaper: 28 times the characters in the
+median with a realistic search order (added after the run; 65 times under
+the rule fixed before it), because a broad search over 1,756 files returns
+hundreds of matching lines
+([details](https://github.com/komakeule57-maker/frugal-memory/blob/main/docs/MEASUREMENTS.md#server-vs-markdown-files)).
+Both compare against markdown notes, not against other memory servers.
 The gap grows as the memory does, because every answer here is capped and
 `grep` is not. All figures come from one installation, and the docs say
 where one did not hold up.

@@ -70,3 +70,21 @@ ins nächste Release. Bei sehr großen Beständen bleibt `verdichten` ein
 Werkzeug für gelegentliche Läufe. Wo die verbleibenden 19 s liegen
 (Paarvergleich oder Stammbildung für alle Einträge), ist nicht gemessen; vor
 weiterem Drehen an der Schwelle gehört ein Profil davor.
+
+## Nachtrag: wo die restlichen 19 s liegen (Profil, 2026-10-27)
+
+Eigene Frage, Kriterium vorher festgelegt: Vorlauf (Abfrage, Stammbildung
+`_staemme` für alle Einträge, `_gewichte`) ≥ 30 % der Zeit → Hebel
+Stammbildung; ≤ 15 % → Hebel Paarvergleich. `profil.py`, ein Aufruf unter
+cProfile je Arm.
+
+- Deckel 25: Vorlauf 7,0 % unter Profil. Gegenprobe ohne Profiler
+  (nachträglich, cProfile verteuert kleine Aufrufe): 1,60 s von 19,26 s = 8,3 %.
+- Heutige Regel: Vorlauf 2,2 %.
+- Rund 60 % der Zeit (unter Profil) stecken in einer Zeile: der
+  Gewichtssumme über die Vereinigung beider Stammmengen
+  (`sum(gew.get(s, 0) for s in sa | sb)`), je Kandidatenpaar neu gerechnet.
+
+Die Vermutung, die Stammbildung sei der Engpass, ist widerlegt. Naheliegender
+Hebel, nicht gemessen: die Summe je Eintrag einmal vorrechnen und
+`vereint = summe[a] + summe[b] - gemeinsam` nehmen, was rechnerisch dasselbe ist.

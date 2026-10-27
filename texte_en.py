@@ -134,6 +134,11 @@ TEXTE_EN = {
     ' - Volltext bis {deckel} Zeichen, die letzten {n} als Vorschau: zeige("{ids}")':
         ' - full text up to {deckel} characters, the last {n} as preview: show("{ids}")',
     "#{zahl} ist keine gueltige Nummer.": "#{zahl} is not a valid number.",
+    "Das installierte mcp-SDK {v} ist intern umgebaut ({exc}). frugal-memory {eigen} "
+    "laeuft mit mcp 2.2 bis 2.x - bitte diese Version installieren oder frugal-memory "
+    "aktualisieren.":
+        "The installed mcp SDK {v} has changed internally ({exc}). frugal-memory {eigen} "
+        "runs with mcp 2.2 to 2.x - please install that version or update frugal-memory.",
     "Diese Datenbank steht auf Schemastand {stand}, dieser Server kennt nur bis {soll}. Sie wurde mit neuerem Code benutzt - den Server aktualisieren, dann wieder hier.":
         "This database is at schema version {stand}, this server only knows up to {soll}. It was used with newer code - update the server, then come back.",
     " (+ schon einmal so gesucht)": " (+ searched like this before)",

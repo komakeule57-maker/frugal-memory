@@ -50,17 +50,42 @@ In real tokens (2026-09-25) it is **2,359 against 11,319 per question,
 results, `.md` files, previews and full texts all come to 1.87–1.90
 characters per token, so the factor cancels out.
 
-**B is the naive case, on purpose.** It models an agent that opens the
-files `grep` found with `Read`, which loads a file whole, and that is
-where B's cost comes from (see the token measurement: searching costs
-250 to 900 tokens on both paths, reading makes the difference). A careful
-agent that reads only the matching lines with a few lines of context
-(`grep -C`) would pay less, and that variant is **not measured** here. The
-closest measured stand-in is `grep -n` in the next section: matching lines
-without context, median 13.0 KB against 4.4 KB for `recall` (still full
-text then, before the preview), on an older bench of 898 entries and 14
-questions. Whether a few lines of context are enough to answer is a
-separate question that this bench cannot judge.
+**B is the naive case, on purpose, and the careful case costs more.** B
+models an agent that opens the files `grep` found with `Read`, which loads
+a file whole. A careful agent would read only the matching lines with a
+few lines of context. That was measured on 2026-10-27, on the same 275
+questions and files, with plan and criterion written before the run
+(`messung/grep_kontext_2026-10-27/`). Cost is the characters of the `grep`
+output per question, median, against A's 4,471:
+
+| `grep` output | × A, realistic order¹ | × A, rule fixed in advance² | right file in the output¹ |
+|---|---:|---:|---:|
+| 3 lines of context (`-C 3`) | 28× | 65× | 75 % |
+| matching lines only (`-C 0`) | 15× | 30× | 75 % |
+| `-C 3`, cut off after 250 lines | 6× | 6× | 34 % |
+
+¹ Narrow search first (only files that contain all terms), the broad one
+(any term) only if that finds nothing — what an agent does without knowing
+the answer. **Added after the run**, so it does not count for the
+criterion; it is the conservative figure.
+² The rule fixed in advance picked, per question, the strategy that showed
+the right file, knowing which one it was. That pushed questions onto the
+broad search, hence the higher cost (and 92 % right file).
+
+A broad search over 1,756 files returns hundreds of matching lines, and
+with context that is several hundred KB. So the naive B, at 22,072
+characters, is the cheapest `grep` path measured. The cut-off variant looks
+cheap only because it cuts the right file away in two cases out of three:
+per answered question (total characters divided by questions with the
+right file in the output, also added afterwards) it costs 13× A, and A
+finds its answer by construction (see below), which flatters A somewhat.
+
+Not measured: an agent that iterates — sharpens its terms, lists files
+first, then reads a few — lands close to B; whether it gets below B is
+open. Whether a few lines of context are enough to answer is not judged
+either, only whether a line of the right file was in the output. And all
+of this compares against markdown notes, not against other memory servers;
+for those see the sections further down.
 
 **The gap grew with the dataset.** A stayed flat (+7.7 %, a tie) while
 the dataset grew by half, because the preview is capped at eight lines. B

@@ -123,9 +123,11 @@ times.
 
 Pairwise comparisons would be quadratic (400,000 pairs at 900 entries).
 So only pairs sharing a **rare** word stem are compared — a stem that
-occurs in more than 5 % of entries connects everything to everything and
-is skipped. That leaves roughly 117,000 pairs and ~3 s across the whole
-dataset.
+occurs in more than 5 % of entries, or in more than 25, connects
+everything to everything and is skipped. Without the fixed 25 the number
+of pairs still grew roughly quadratically: at 1,593 entries 509,500 pairs
+and 61 s on a two-core laptop, with it 147,941 pairs and 19 s, finding the
+same pairs (measured in `messung/verdichten_deckel_2026-10-27/`).
 
 
 ## `vergessen(ids, grund="", rueckgaengig=False)`

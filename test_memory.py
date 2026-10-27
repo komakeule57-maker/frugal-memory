@@ -502,6 +502,60 @@ def test_neuerer_schemastand_wird_nicht_still_zurueckgesetzt():
     assert int(stand) == ms.SCHEMA_STAND + 1, stand
 
 
+def test_abgelehnter_schemastand_schliesst_die_verbindung():
+    """Re-Audit 2026-10-27: `_connect` liess die Verbindung offen, wenn
+    `_schema_sicherstellen` warf (ResourceWarning: unclosed database)."""
+    ms.remember("Etwas", tags="probe", art="fallstrick")
+    with sqlite3.connect(ms.DB_PATH) as conn:
+        conn.execute("UPDATE schema SET wert = ? WHERE schluessel = 'stand'",
+                     (str(ms.SCHEMA_STAND + 1),))
+    geoeffnet = []
+    echt = ms.sqlite3.connect
+    def merken(*a, **k):
+        geoeffnet.append(echt(*a, **k))
+        return geoeffnet[-1]
+    ms.sqlite3.connect = merken
+    try:
+        try:
+            ms.recall("Etwas")
+        except RuntimeError:
+            pass
+    finally:
+        ms.sqlite3.connect = echt
+    assert geoeffnet
+    for conn in geoeffnet:
+        try:
+            conn.execute("SELECT 1")
+        except sqlite3.ProgrammingError:
+            continue
+        raise AssertionError("Verbindung blieb offen")
+
+
+def test_die_privaten_teile_des_sdk_sind_da():
+    """Kanarienvogel: Gast, Englisch, Archiv und Messbuch tauschen Werkzeuge
+    und Anweisung ueber zwei private Teile des SDK. Benennt ein Update sie um,
+    soll das hier auffallen und nicht erst beim Start eines Nutzers."""
+    verwaltung, kern = ms._sdk_intern()
+    werkzeuge = verwaltung.list_tools()
+    assert werkzeuge and all(isinstance(w.parameters, dict) for w in werkzeuge)
+    assert callable(verwaltung.remove_tool)
+    alt = kern.instructions
+    kern.instructions = "probe"
+    try:
+        assert ms.server.instructions == "probe"
+    finally:
+        kern.instructions = alt
+
+
+def test_umgebautes_sdk_gibt_eine_klare_meldung():
+    try:
+        ms._sdk_intern(object())
+    except RuntimeError as fehler:
+        assert "mcp 2.2 bis 2.x" in str(fehler), fehler
+    else:
+        raise AssertionError("kein RuntimeError")
+
+
 def test_anfuehrungszeichen_in_der_marke():
     """Audit 2026-10-27: ein einzelnes " in tags liess remember nichts
     speichern, recall(marke=) meldete eine ungueltige Anfrage und
@@ -769,6 +823,23 @@ def test_verdichten_nimmt_untermarken_mit():
     ms.remember("Ein Text ueber Katzen und Hunde", tags="proj extra", art="fallstrick")
     aus = ms.verdichten(marke="proj")
     assert "2 Eintraege" in aus, aus
+
+
+def test_verdichten_deckelt_die_seltenheit():
+    """Ein Stamm in drei von 63 Eintraegen ist selten (63 // 20 = 3) - ausser
+    der feste Deckel liegt darunter. Dann wird das Paar gar nicht verglichen."""
+    for i in range(60):
+        ms.remember(f"Fuellnotiz nummer {i} mit Wort{i}x", tags="proj", art="verlauf")
+    for _ in range(3):
+        ms.remember("Dampfkessel Glysantin Frostschutz Keller", tags="proj", art="fallstrick")
+    assert "1 Gruppe(n)" in ms.verdichten(), ms.verdichten()
+    alt = ms.DECKEL_SELTEN
+    ms.DECKEL_SELTEN = 2
+    try:
+        aus = ms.verdichten()
+    finally:
+        ms.DECKEL_SELTEN = alt
+    assert "nichts ueber" in aus, aus
 
 
 def test_remember_zeigt_die_dublette():

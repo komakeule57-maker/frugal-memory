@@ -873,8 +873,9 @@ ANWEISUNG_EN = (
 
 def anmelden(server) -> None:
     """Ersetzt die Werkzeuge des Gedaechtnisses durch die des Messbuchs."""
-    for w in list(server._tool_manager.list_tools()):
-        server._tool_manager.remove_tool(w.name)
+    verwaltung, kern = ms._sdk_intern(server)
+    for w in list(verwaltung.list_tools()):
+        verwaltung.remove_tool(w.name)
     if ms._en():
         import messbuch_en
         werkzeuge = messbuch_en.WERKZEUGE
@@ -882,11 +883,11 @@ def anmelden(server) -> None:
         werkzeuge = WERKZEUGE
     for fn in werkzeuge:
         server.tool()(fn)
-    server._lowlevel_server.instructions = ANWEISUNG_EN if ms._en() else ANWEISUNG
+    kern.instructions = ANWEISUNG_EN if ms._en() else ANWEISUNG
     # `"default": ""` je Parameter sagt nichts, was die Liste `required` nicht
     # schon sagt, und kostet in jeder Sitzung rund 400 Zeichen. Geprueft
     # werden die Argumente ueber fn_metadata, nicht ueber dieses Dict.
-    for w in server._tool_manager.list_tools():
+    for w in verwaltung.list_tools():
         for feld in w.parameters.get("properties", {}).values():
             if isinstance(feld, dict):
                 feld.pop("default", None)

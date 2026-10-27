@@ -61,3 +61,19 @@ Kontext ausspuckt. Die README-Aussage „grep -C nicht gemessen“ kann durch
 „gemessen, 6- bis 65-mal so teuer je nach Kappung“ ersetzt werden. Offen bleibt
 nur, ob ein geschickt iterierender Agent unter B1 kommt; das ist eine andere
 Messung mit echtem Agenten statt Skript.
+
+## Nachtrag: Kosten je beantworteter Frage (nachträglich, zählt nicht)
+
+Anregung des Auditors: die gekappte Variante ist billig, beantwortet aber nur
+rund jede dritte Frage. `je_antwort.py`: Summe der Zeichen geteilt durch die
+Fragen mit Gold im Ausschnitt, gegen A je Frage (Mittel 5.511; Mittel, nicht
+Median, weil eine Summe geteilt wird):
+
+| Arm | Wahl laut Plan | Wahl wie ein Agent |
+|---|---:|---:|
+| B3-C3 | 77× | 75× |
+| B3-C0 | 35× | 35× |
+| B3-C3-250 | 12× | 13× |
+
+A findet Gold per Konstruktion; das schmeichelt A. Die Überschlagsrechnung
+des Auditors (rund 18× für die gekappte Variante) lag in der Größenordnung.
