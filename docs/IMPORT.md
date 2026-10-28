@@ -55,7 +55,7 @@ search does.
 
 The fix was a `kette` table in schema version 4; since version 5 these are
 the columns `kopf` and `nr` of the entry. `_ketten_nachtragen()` finds the
-cuts and records head and position; `recall` and `zeige` append a note
+cuts and records head and position; `recall` and `show` append a note
 built from it, from piece 2 onward with the head's subject:
 
 ```
@@ -113,10 +113,10 @@ tag rule would catch them instead and turn a cross-reference into an
 `arbeitsweise` (way-of-working) entry.
 
 The rest deliberately stays `gemischt` (mixed) (714 living entries as of
-2026-09-14 — outdated ones don't count as backlog; `einordnen` reports
+2026-09-14 — outdated ones don't count as backlog; `classify` reports
 the number on every call). A heuristic that guesses at this remainder
 would be worse than none — it would produce wrong classifications that
-nobody would ever double-check again. Instead, `einordnen()` catches up
+nobody would ever double-check again. Instead, `classify()` catches up
 while reading: whatever `recall` surfaces anyway gets its kind assigned
 along the way, whatever never gets searched for rightly never does.
 Callable repeatedly; anything already classified stays untouched.

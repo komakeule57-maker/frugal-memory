@@ -1,12 +1,12 @@
 # The Fact Check
 
-Everything about `pruefe` and `faktencheck.py`: what it is for, how to point
+Everything about `check` (`pruefe` in German mode) and `faktencheck.py`: what it is for, how to point
 it at a model, what it measurably can and cannot do, and how to re-measure it.
 
-## `pruefe(ids)` — opt-in, needs a language model
+## `check(ids)` — opt-in, needs a language model
 
-Counterpart to `verdichten`: that one finds groups by word overlap,
-`pruefe` says whether a **contradiction** or just a **newer state of
+Counterpart to `consolidate`: that one finds groups by word overlap,
+`check` says whether a **contradiction** or just a **newer state of
 affairs** is behind it. Each pair is asked in **both directions**
 (rationale below), so it costs two requests and roughly 10 s. Hence the
 cap of 5 pairs asked per call.
@@ -121,7 +121,7 @@ consequences:
 
 For WIDERSPRUCH and UNABHAENGIG that's simply wrong, both relations are
 symmetric; only FORTSCHRITT has a direction, and it's carried by `ts`, not by
-call order. Fixed in `pruefe` by asking both directions and only accepting
+call order. Fixed in `check` by asking both directions and only accepting
 what says the same thing twice. A fixed order (older id first) would have been the
 cheaper fix, but would only have made the verdict reproducible, not more
 correct.
@@ -132,16 +132,16 @@ same title line thus collapse into each other. #1416/#1418 ended up
 byte-identical afterward and got WIDERSPRUCH. Counter-test with four
 texts against themselves: **1 of 4** contradicted itself. A logically
 impossible verdict, hence a hard upper bound on reliability — and it hit
-exactly the advertised use case, since `verdichten` by construction
+exactly the advertised use case, since `consolidate` by construction
 delivers near-identical entries. Fixed with
-`faktencheck.deckungsgleich(a, b)`: in `pruefe`, such pairs no longer go to
+`faktencheck.deckungsgleich(a, b)`: in `check`, such pairs no longer go to
 the device and instead get the note that there's nothing to assess here.
 
-**Both fixes apply to `pruefe` only.** The note that `remember` adds to its
+**Both fixes apply to `check` only.** The note that `remember` adds to its
 list of similar entries still asks one direction and does not filter
 identical notes — on purpose: it runs inside every save, and doubling the
 requests would double the wait. Read it as a hint where to look, and use
-`pruefe` when the verdict matters.
+`check` when the verdict matters.
 
 After the rework, the two former false alarms report `uneinig` (disputed),
 the real contradiction #1387/#1393 remains WIDERSPRUCH in both
@@ -200,7 +200,7 @@ Settings via the environment:
 | `MEMORY_FC_AUS` | empty | set to `1` to turn the fact check off without dropping the address |
 | `MEMORY_FC_PROBE` | `3.0` | seconds for the `/v1/models` pre-check. **`0` skips it entirely** — useful where the endpoint lists hundreds of ids, or one that isn't the one you ask with, in which case the model check would lock out a perfectly healthy provider. It also saves one request per call; the pre-check exists for a device that is often gone, not for a datacenter |
 | `MEMORY_FC_ZEICHEN` | `200` | note text per side; 200 is the measured sweet spot |
-| `MEMORY_FC_BUDGET` | `25` | seconds across all pairs of one `remember`; `pruefe` ignores it and allows 25 s per direction asked |
+| `MEMORY_FC_BUDGET` | `25` | seconds across all pairs of one `remember`; `check` ignores it and allows 25 s per direction asked |
 | `MEMORY_FC_FRIST` | `20` | seconds per single request |
 | `MEMORY_FC_SPERRE` | `300` | seconds of cooldown after an expensive failure |
 | `MEMORY_FC_SPERRE_KURZ` | `15` | seconds of cooldown when only the service is missing |
@@ -227,7 +227,7 @@ still shows it — the two detectors cover for each other here.
 
 ## Re-measuring the Fact Check
 
-The number `pruefe` stands on (9/15) was collected by hand and
+The number `check` stands on (9/15) was collected by hand and
 reproducible nowhere — hence the warning above that rephrasing the prompt
 invalidates it. True, but there was no way to re-collect it.
 `pruefstand_fc.py` is that way.
@@ -266,7 +266,7 @@ gets separated at all — a detector that fires on random pairs was the
 finding against the NLI model.
 
 Two filters keep the hard set clean: near-duplicates (over 90 % contained)
-are dropped — those belong in `verdichten`, not `pruefe` — and no entry
+are dropped — those belong in `consolidate`, not `check` — and no entry
 appears more than twice, otherwise a group of three would ask the same
 question three times.
 

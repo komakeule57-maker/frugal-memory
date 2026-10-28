@@ -7,12 +7,12 @@
     "url": "https://github.com/komakeule57-maker/frugal-memory",
     "source": "github"
   },
-  "version": "0.2.3",
+  "version": "0.3.0",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "frugal-memory",
-      "version": "0.2.3",
+      "version": "0.3.0",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
@@ -20,7 +20,7 @@
       "environmentVariables": [
         {
           "name": "MEMORY_LANG",
-          "description": "Tool names and texts: 'de' (default) or 'en'.",
+          "description": "Tool names, texts and stemmer: 'en' (default for a new memory) or 'de'. Unset, an existing memory keeps the language it was built in.",
           "isRequired": false
         },
         {

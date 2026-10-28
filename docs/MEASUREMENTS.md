@@ -2,6 +2,10 @@
 
 What was measured, against what, and where it did not hold up.
 
+The measurements ran against a German memory, so tool and parameter names
+here are the German ones (`zeige` = `show`, `themen` = `topics`, `marke=` =
+`tag=`, …; the full list is at the top of [TOOLS.md](TOOLS.md)).
+
 Everything here comes from one installation and one user's dataset, which
 grew from about 900 to 1,900 entries while these measurements were taken —
 so each section names the size it was measured at. Unless a section says

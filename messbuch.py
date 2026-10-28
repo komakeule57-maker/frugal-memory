@@ -4,7 +4,7 @@
 Betriebsart von memory_server.py, gestartet mit `--messbuch`. Eigene Datei
 (MESSBUCH_DB, sonst messbuch.db wie beim Gedaechtnis: neben dem Skript bzw.
 im Datenverzeichnis des Nutzers), eigene Werkzeuge; das Gedaechtnis wird in
-dieser Betriebsart nicht geoeffnet. Englisch mit MEMORY_LANG=en wie der Kern:
+dieser Betriebsart nicht geoeffnet. Englisch (Vorgabe seit 0.3.0, Deutsch mit MEMORY_LANG=de):
 Meldungen ueber `_t`, Werkzeuge aus messbuch_en.py, Status und Urteile werden
 an der Grenze uebersetzt - in der Datei stehen sie immer deutsch.
 

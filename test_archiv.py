@@ -17,7 +17,8 @@ import traceback
 from pathlib import Path
 
 os.environ["MEMORY_FC_AUS"] = "1"
-os.environ.pop("MEMORY_LANG", None)
+# Die Tests pruefen die deutschen Meldungen; die Vorgabe ist seit 0.3.0 Englisch.
+os.environ["MEMORY_LANG"] = "de"
 os.environ.pop("ARCHIVE_NAME", None)
 os.environ["ARCHIVE_DB"] = str(Path(tempfile.mkdtemp(prefix="archtest-import-")) / "archive.db")
 import memory_server as ms  # noqa: E402

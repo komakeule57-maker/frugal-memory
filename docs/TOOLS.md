@@ -1,12 +1,28 @@
 # Tools
 
-Reference for all eight MCP tools. The fact check behind `pruefe` has its
+Reference for all eight MCP tools. The fact check behind `check` has its
 own page: [FACTCHECK.md](FACTCHECK.md).
 
-## Across `recall` and `zeige`: the feedback loop
+Names are the English defaults. With `MEMORY_LANG=de` (or a German memory
+from before 0.3.0) the same tools and parameters are called:
+
+| English | German |
+|---|---|
+| `show(ids, full)` | `zeige(ids, voll)` |
+| `topics(tag, limit, page, all)` | `themen(marke, limit, seite, alle)` |
+| `forget(ids, reason, undo)` | `vergessen(ids, grund, rueckgaengig)` |
+| `classify(ids, kind)` | `einordnen(ids, art)` |
+| `consolidate(tag, kind, threshold, groups)` | `verdichten(marke, art, schwelle, gruppen)` |
+| `check(ids)` | `pruefe(ids)` |
+| `remember(…, kind, supersedes)`, `recall(…, kind, tag, full, include_superseded)` | `remember(…, art, ersetzt)`, `recall(…, art, marke, voll, mit_veraltet)` |
+| kinds `interface`, `pitfall`, `decision`, `measurement`, `workflow`, `history`, `unsorted`, `all` | `schnittstelle`, `fallstrick`, `entscheidung`, `messwert`, `arbeitsweise`, `verlauf`, `gemischt`, `alle` |
+
+The example outputs come from the author's own memory, which is German.
+
+## Across `recall` and `show`: the feedback loop
 
 These two tools share one piece of state. When a search is followed by a
-`zeige`, the server stores the pair — the **wording that was searched for**
+`show`, the server stores the pair — the **wording that was searched for**
 and the **entry that was then fetched**. Ask the same thing again and those
 entries come first, and the header says so: `(+ schon einmal so gesucht)`.
 
@@ -26,7 +42,7 @@ built (`messung/RUECKKOPPLUNG.md`):
   subject, not an answer, and nothing is stored. Without this guard the loop
   collects exactly the poison it cannot tolerate.
 - **Boosted hits pass the same filters as any other.** A superseded entry,
-  or one excluded by `art=` or `marke=`, stays out.
+  or one excluded by `kind=` or `tag=`, stays out.
 
 `RUECKKOPPLUNG = False` in `memory_server.py` is the kill switch; it stops
 both firing and collecting. Measured tolerance: the loop survives about 10 %
@@ -34,17 +50,17 @@ wrong pairs and is worse than no loop at 25 %, so if `nachfrage` is ever
 suspected of being polluted, flip the switch and clean the table rather than
 blaming the ranking.
 
-A `zeige` with no search before it stores nothing — whoever already knows
+A `show` with no search before it stores nothing — whoever already knows
 the id was not answering a question.
 
-## `remember(text, tags="", art="", ersetzt="")`
+## `remember(text, tags="", kind="", supersedes="")`
 
 Creates an entry with the current timestamp and returns its **id**.
 `tags` are free-form keywords and get searched too — convention: the
-project. `art` is the kind of knowledge (see [DESIGN.md](DESIGN.md#two-axes-tag-and-kind)). `ersetzt="12,34"`
+project. `kind` is the kind of knowledge (see [DESIGN.md](DESIGN.md#two-axes-tag-and-kind)). `supersedes="12,34"`
 supersedes the named entries.
 
-Without `art`, the entry lands as `gemischt` (mixed) and the return value
+Without `kind`, the entry lands as `unsorted` and the return value
 flags it. It also flags the **scope**: over 900 characters, or a date as
 the very first thing in the text (optional `**` asterisks before it) at
 more than 400 characters. Both are signs that chronicle and knowledge are
@@ -82,7 +98,7 @@ entries and 144,723 candidate pairs, only 11 pairs reach 30 % overlap or
 more, and of the 6 with differing numbers, none is a contradiction —
 they're progress snapshots, both true at their respective time. So it
 finds nothing new; it only says why you should look at a hit that's
-already shown, and that's the path to `ersetzt=`. It's only shown when
+already shown, and that's the path to `supersedes=`. It's only shown when
 both sides have numbers the other side lacks — otherwise the condition
 would fire on every newly added date.
 
@@ -109,15 +125,15 @@ the whole tool: `recall`'s return consists of whole entries. Whoever
 saves a 180 KB file as a single entry also gets it back as a single hit —
 and has gained nothing.
 
-## `verdichten(marke="", art="alle", schwelle=0.5, gruppen=5)`
+## `consolidate(tag="", kind="all", threshold=0.5, groups=5)`
 
 Finds groups of entries that say largely the same thing — typically: an
 old state next to a new one ("version 0.2" next to "version 0.3", "186
 checks" next to "242 checks"). **Doesn't summarize anything itself.** You
 write a new entry from a group and supersede the old ones via
-`remember(..., ersetzt=...)`.
+`remember(..., supersedes=...)`.
 
-`art="verlauf"` tackles the chronicle on its own — that's where most
+`kind="history"` tackles the chronicle on its own — that's where most
 duplicates sit, because the same piece of work gets described multiple
 times.
 
@@ -133,19 +149,19 @@ identical to the character (measured in `messung/verdichten_deckel_2026-10-27/`
 and `messung/verdichten_vereinigung_2026-10-27/`).
 
 
-## `vergessen(ids, grund="", rueckgaengig=False)`
+## `forget(ids, reason="", undo=False)`
 
 Marks entries as outdated. **Nothing is ever deleted** — they only
 disappear from the default view and remain findable with
-`mit_veraltet=True`, along with a note of why and what replaced them.
+`include_superseded=True`, along with a note of why and what replaced them.
 
-`rueckgaengig=True` takes it back: the entries return to the default view
+`undo=True` takes it back: the entries return to the default view
 with their old id and date. This works for superseded entries too; the
 answer then says that both the old and the new entry count again. The
 notes of the undone retirement are not deleted either, they move to the
 table `veraltet_aufgehoben`.
 
-## `recall(query, limit=8, art="", marke="", voll=False, mit_veraltet=False)`
+## `recall(query, limit=8, kind="", tag="", full=False, include_superseded=False)`
 
 Full-text search, best match first. The default is a **preview**:
 
@@ -154,7 +170,7 @@ Full-text search, best match first. The default is a **preview**:
 ```
 
 That is: id, kind, date, title line, tag. Get the full text of the
-interesting ones afterward with `zeige("376,481")`, or set `voll=True`
+interesting ones afterward with `show("376,481")`, or set `full=True`
 right away if the question is narrow enough.
 
 The title is **not** the first line of text: entries are hard-wrapped at
@@ -169,7 +185,7 @@ cut apart"). From piece 2 onward it names the head's subject too, since
 that's not in the piece itself: `[Stueck 2 von 4 von "<subject>",
 zerschnittenes Memo #872-#875]`. In that case the entry is a
 fragment from the file import, the context does **not** live in it, and
-the whole chain needs reading (`zeige("872,873,874,875")`). Why these
+the whole chain needs reading (`show("872,873,874,875")`). Why these
 exist: [What the Import Broke](IMPORT.md#what-the-import-broke).
 
 **A chain takes one of the eight slots, not several.** If more than one
@@ -180,16 +196,16 @@ down, so the list stays at `limit` instead of getting shorter. Before
 this, 8.5 % of real questions had slots taken by sibling pieces, in one
 case four of eight ([MEASUREMENTS.md](MEASUREMENTS.md#one-slot-per-chain)).
 
-`art="fallstrick,entscheidung"` restricts to kinds of knowledge,
-`art="alle"` also lifts the chronicle's exclusion.
+`kind="pitfall,decision"` restricts to kinds of knowledge,
+`kind="all"` also lifts the chronicle's exclusion.
 
-`marke="raumschiff-project"` restricts to one project — the usual case,
+`tag="raumschiff-project"` restricts to one project — the usual case,
 because a session almost always belongs to one project. Multiple tags are
 OR-combined. **Sub-tags are included:** the tag is searched as a phrase
-and the tokenizer splits on hyphens, so `marke="leuchtturm"` also matches
-`leuchtturm-project`; conversely `marke="mcp-memory-server"` does not
+and the tokenizer splits on hyphens, so `tag="leuchtturm"` also matches
+`leuchtturm-project`; conversely `tag="mcp-memory-server"` does not
 match `mcp-memory`, because the phrase needs all three tokens in
-sequence. `themen()` lists which tags exist.
+sequence. `topics()` lists which tags exist.
 
 The filter sits **in the MATCH query, not in the WHERE clause**. A row
 filter of the form `rowid IN (SELECT …)` alongside `ORDER BY rank LIMIT n`
@@ -237,7 +253,7 @@ constantly in German questions.
 On `limit`: the default is 8; a larger one mostly grows the returned
 payload.
 
-### `marke=` is a hard filter — and says so when it hurts
+### `tag=` is a hard filter — and says so when it hurts
 
 The tag is joined with `AND` to **every** stage of the cascade, the `OR`
 fallback included. Nothing outside the project can appear among the hits.
@@ -246,7 +262,7 @@ also a trap: a question about general knowledge (the machine, a tool, a
 way of working), asked from inside a project session, used to come back
 as eight project entries that merely share a word with it.
 
-So when a search under `marke=` falls back to `OR`, `recall` runs the
+So when a search under `tag=` falls back to `OR`, `recall` runs the
 same search once without the tag. If the best hit of that search lies
 outside the project, a last line names it:
 
@@ -255,7 +271,7 @@ Ausserhalb von raumschiff-project passt besser: #812 [fallstrick] 2026-09-12 Die
 ```
 
 It is a pointer, not a ninth hit: the list itself stays inside the tag.
-Often the line already is the answer and `zeige("812")` finishes the job.
+Often the line already is the answer and `show("812")` finishes the job.
 Two simpler triggers were measured and dropped — see "A Project Tag Hides
 Everything Outside It" in [MEASUREMENTS.md](MEASUREMENTS.md).
 
@@ -265,7 +281,7 @@ Same search as `recall`, but with the top hit in full text and split memos
 merged into one citation. It went through a trial with a criterion fixed in
 advance (zero calls → remove): named in the instructions since 2026-09-25,
 it was not called once in 14 sessions with 35 searches, and measured over 275
-real questions it cost +10 % characters against `recall` → `zeige`. Its
+real questions it cost +10 % characters against `recall` → `show`. Its
 description, 2,570 characters, was paid in every session regardless. The
 source is in the git history, the measurements in `messung/`.
 
@@ -275,22 +291,22 @@ tool definitions up front. Claude Code was observed loading them on demand
 [MEASUREMENTS.md](MEASUREMENTS.md). The trial's verdict does not hang on
 that sentence: zero calls was the criterion.
 
-## `themen(marke="", limit=0, seite=1, alle=False)`
+## `topics(tag="", limit=0, page=1, all=False)`
 
 Counterpart to `recall`: that searches for words, this **browses**.
 
 ```
-themen()                               -> which projects exist, how big, how distributed
-themen("mcp-memory-server")            -> this project's 30 newest title lines
-themen("mcp-memory-server", seite=2)   -> the next 30
-themen("mcp-memory-server", alle=True) -> the whole index, grouped by kind
+topics()                               -> which projects exist, how big, how distributed
+topics("mcp-memory-server")            -> this project's 30 newest title lines
+topics("mcp-memory-server", page=2)    -> the next 30
+topics("mcp-memory-server", all=True)  -> the whole index, grouped by kind
 ```
 
 **What's this for, when there's already a search:** `recall` only finds
 what you already know to ask for. Whoever picks a project back up after
 months doesn't remember the terms anymore — and needs a list first, from
 which to pull up the entry. The sequence is then
-`themen("project")` → `zeige("id")` or `recall(query, marke="project")`.
+`topics("project")` → `show("id")` or `recall(query, tag="project")`.
 
 **One page, newest first.** Until 2026-10-04 the title index showed up to
 40 entries *per kind*; for a project with 351 entries that was 26,506
@@ -303,7 +319,7 @@ That makes page 1 the answer to "what happened here lately" — and
 nothing more. It is sorted by date, so in a large project an older entry
 is not on it: of 60 randomly drawn entries from the twelve largest
 projects, 18 were (the old index had 57, at two and a half times the
-size). **For anything older, `recall(query, marke="project")` is the
+size). **For anything older, `recall(query, tag="project")` is the
 way**, not paging.
 
 The board without an argument also shows, incidentally, where the kind
@@ -320,9 +336,9 @@ neither catches the other's case.
 Unlike `recall`, the **chronicle is not hidden here**: when browsing it's
 the scaffolding, not the filler that drowns out every search.
 
-## `zeige(ids, voll=False)`
+## `show(ids, full=False)`
 
-Counterpart to the preview: `zeige("376,481")` returns exactly those
+Counterpart to the preview: `show("376,481")` returns exactly those
 entries in full text. Outdated ones explicitly included — whoever asks
 for the id means that one too. This output also carries the chain note:
 it names the neighboring ids, and that's exactly when you want them —
@@ -330,7 +346,7 @@ when you're already looking at the full text.
 
 **About 6,000 characters per call**, in the order asked — so the id you
 want most goes first. What doesn't fit comes back as a title line, with
-the call that fetches it; `voll=True` lifts the cap:
+the call that fetches it; `full=True` lifts the cap:
 
 ```
 3 weitere verlangt, nicht gezeigt (Deckel 6000 Zeichen je Aufruf) - weiter mit zeige("481,502,77"), alles auf einmal mit voll=True:
@@ -349,10 +365,10 @@ from cutting silently:
 - A single entry longer than the cap is the only thing ever cut
   mid-text: at a line break, with both lengths and the call for the rest.
 
-## `einordnen(ids, art)`
+## `classify(ids, kind)`
 
 Sets the kind of knowledge for existing entries and reports how many are
 still without a kind. Meant for doing in passing: whatever `recall`
 surfaces anyway gets its kind assigned along the way.
-`einordnen(ids, "gemischt")` undoes the classification.
+`classify(ids, "unsorted")` undoes the classification.
 

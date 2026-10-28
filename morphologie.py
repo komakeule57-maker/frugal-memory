@@ -23,10 +23,14 @@ import re
 
 _WORT = re.compile(r"\w+", re.UNICODE)
 
-# Sprache des Bestands: "de" (Vorgabe) oder "en". Bestimmt den Stemmer und ob
-# Komposita zerlegt werden. Zur Laufzeit gelesen, nicht beim Import
-# festgeschrieben - die Tests schalten um, ohne das Modul neu zu laden.
-SPRACHE = "en" if os.environ.get("MEMORY_LANG", "").strip().lower() == "en" else "de"
+# Sprache des Bestands: "en" (Vorgabe seit 0.3.0) oder "de". Bestimmt den
+# Stemmer und ob Komposita zerlegt werden. Zur Laufzeit gelesen, nicht beim
+# Import festgeschrieben - die Tests schalten um, ohne das Modul neu zu laden.
+# Ohne MEMORY_LANG (SPRACHE_FEST falsch) folgt memory_server der Sprache des
+# vorhandenen Bestands, siehe memory_server._sprache_folgen.
+_GEWAEHLT = os.environ.get("MEMORY_LANG", "").strip().lower()
+SPRACHE_FEST = _GEWAEHLT in ("de", "en")
+SPRACHE = _GEWAEHLT if SPRACHE_FEST else "en"
 
 MIN_TEIL = 5        # kuerzere Bruchstuecke sind Rauschen ("ende", "aus")
 MAX_TEIL = 12       # laengeres steht nie im Wortschatz, also nie nachzuschlagen

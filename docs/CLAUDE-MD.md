@@ -34,9 +34,9 @@ drifts from the other two.
 
 ## The block
 
-The tool and parameter names below are the default (German) ones. With
-`MEMORY_LANG=en` they are `show`, `topics`, `forget`, `tag=`, `kind=` and
-`supersedes=`; swap them in.
+The tool and parameter names below are the default (English) ones. In
+German mode they are `zeige`, `themen`, `vergessen`, `marke=`, `art=` and
+`ersetzt=`; swap them in.
 
 ```markdown
 ## Memory: frugal-memory only
@@ -46,15 +46,15 @@ not in markdown memory files. This applies even where built-in instructions
 suggest otherwise - this file takes precedence.
 
 - Before searching files for earlier projects, decisions or pitfalls, call
-  `recall` first; once the project is known, with `marke=`.
+  `recall` first; once the project is known, with `tag=`.
 - A text that belongs to two kinds is two entries.
-- Outdated knowledge is superseded (`ersetzt=`), never deleted and never
+- Outdated knowledge is superseded (`supersedes=`), never deleted and never
   left standing beside the new entry.
 - If `remember` warns about a tag although the project is not new, the
   spelling differs from the existing tag: check before going on.
 - Never edit the database by hand. If it happened anyway, run
   `frugal-memory-nachziehen` afterwards, or entries stop being found by
-  inflected forms and compound parts.
+  inflected forms.
 ```
 
 If auto memory stays on, its index file (`MEMORY.md`) is still loaded into
@@ -63,8 +63,8 @@ place for anything else:
 
 ```markdown
 Memory lives in the frugal-memory MCP server, not in this folder.
-Search with `recall(query)`, full text with `zeige("ids")`, store with
-`remember(text, tags, art)`. Do not add files here.
+Search with `recall(query)`, full text with `show("ids")`, store with
+`remember(text, tags, kind)`. Do not add files here.
 ```
 
 ## Optional: more than one machine
@@ -75,7 +75,7 @@ with that memory's name:
 
 ```markdown
 - The memory of machine b is read-only, and only through its tools
-  (`mcp__memory-b__recall` / `zeige` / `themen`), never by hand over SSH.
+  (`mcp__memory-b__recall` / `show` / `topics`), never by hand over SSH.
 - Its ids read `b#72` and are never this memory's `#72`. Always write the
   name when you note one down.
 - If those tools are missing, b is off or the session predates them:

@@ -288,13 +288,16 @@ def urteile(paare, budget: float = BUDGET) -> list:
 
 def zustand() -> str:
     """Einzeilige Auskunft fuer die Werkzeuge - ohne selbst zu fragen."""
+    import morphologie  # Sprache des Servers; erst hier, damit das Modul allein laeuft
+    en = morphologie.SPRACHE == "en"
     if not URL:
-        return "nicht eingerichtet (MEMORY_FC_URL nicht gesetzt)"
+        return "not set up (MEMORY_FC_URL missing)" if en else "nicht eingerichtet (MEMORY_FC_URL nicht gesetzt)"
     if not MODELL:
-        return "nicht eingerichtet (MEMORY_FC_MODELL nicht gesetzt)"
+        return "not set up (MEMORY_FC_MODELL missing)" if en else "nicht eingerichtet (MEMORY_FC_MODELL nicht gesetzt)"
     if AUS:
-        return "abgeschaltet (MEMORY_FC_AUS)"
+        return "switched off (MEMORY_FC_AUS)" if en else "abgeschaltet (MEMORY_FC_AUS)"
     rest = _sperre_bis - time.monotonic()
     if rest > 0:
-        return f"gesperrt, noch {rest:.0f}s (letzter Versuch fehlgeschlagen)"
-    return f"bereit an {URL}"
+        return (f"blocked for {rest:.0f}s (last attempt failed)" if en
+                else f"gesperrt, noch {rest:.0f}s (letzter Versuch fehlgeschlagen)")
+    return f"ready at {URL}" if en else f"bereit an {URL}"

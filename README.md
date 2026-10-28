@@ -41,7 +41,7 @@ contradictions surface instead of quietly piling up.
 ## Features
 
 - **Capped, calculable answers** — a search returns eight preview lines
-  of about 1.2 KB in total instead of 4.2 KB of full text; `zeige` then
+  of about 1.2 KB in total instead of 4.2 KB of full text; `show` then
   fetches the entries you pick, about 6,000 characters per call unless
   you ask for everything. The worst case is known before you ask.
 - **It learns from its own failures** — when a search is followed by
@@ -57,12 +57,12 @@ contradictions surface instead of quietly piling up.
 - **Nothing is ever deleted** — superseded entries drop out of the default
   view and stay findable, with a note on why and by what. One switch
   brings them back if that was a mistake.
-- **Browsing, not just searching** — `themen()` lists projects and a
+- **Browsing, not just searching** — `topics()` lists projects and a
   project's newest title lines for when you have forgotten the words to
   search for. Capped like everything else: one page, and a line saying how
   to get the rest.
 - **Project-bound in use, not in search** — the usual question is asked
-  inside one project, with `marke=`. That filter is hard, so when the best
+  inside one project, with `tag=`. That filter is hard, so when the best
   match lies outside the project, `recall` names it instead of leaving you
   with a plausible-looking list of the wrong entries.
 - **Two opt-in extensions on the same engine** — a literature archive
@@ -71,11 +71,15 @@ contradictions surface instead of quietly piling up.
   nothing changes ([below](#two-opt-in-extensions)).
 - **Opt-in second opinion** — optionally ask any OpenAI-compatible model
   whether two entries contradict each other or just supersede one another.
-- **German by default, English on request** — tool names, messages and
-  kinds are German; `MEMORY_LANG=en` switches all of it. The search also
-  matches inflected forms and compound parts ("Rangliste" finds
-  "Ranglisten"). Measured, that rarely changes the answer: the plain
-  any-term stage of the search already finds what the stems would add
+- **English by default, German as a second language** — the search
+  matches inflected forms ("configured" finds "configuring").
+  `MEMORY_LANG=de` switches tool names, messages and kinds to German, and
+  the search to German stems and compound parts ("Rangliste" finds
+  "Ranglisten", "Katalysator" finds "Fusionskatalysator"). The figures
+  from real use below come from German notes
+  ([A Note on Language](#a-note-on-language)). Measured, the stems rarely
+  change the answer: the plain any-term stage of the search already finds
+  what they would add
   ([details](https://github.com/komakeule57-maker/frugal-memory/blob/main/docs/MEASUREMENTS.md#the-cascade-against-plain-or)).
 
 ## Requirements
@@ -156,11 +160,11 @@ single entry and you get it back as a single hit, having gained nothing.
 ### Teaching the agent how to use it
 
 The tools alone don't tell an agent the working rules: search before
-reading files, `recall` → `zeige`, exactly one kind per entry, supersede
+reading files, `recall` → `show`, exactly one kind per entry, supersede
 instead of accumulate, retry in the other language. Two layers carry them:
 
 - **The short form comes with the server.** On connecting it sends about
-  600 characters of instructions (German, or English with `MEMORY_LANG=en`),
+  600 characters of instructions (English, or German with `MEMORY_LANG=de`),
   which Claude Code adds to every session that has the server. Guest mode
   (`--gast`) sends none, since it cannot store anything.
 - **The full rules are a skill.** It ships with the repo and the PyPI
@@ -195,49 +199,50 @@ claude mcp add memory-b -s project -- \
 `--gast` (guest) means three things:
 
 - **Read-only.** The file is opened with `mode=ro`, and only `recall`,
-  `zeige` and `themen` are offered. The writing tools are gone, and so are
-  `verdichten` and `pruefe`: upkeep belongs to the owner, who can act on it. A guest's searches do
+  `show` and `topics` are offered. The writing tools are gone, and so are
+  `consolidate` and `check`: upkeep belongs to the owner, who can act on it. A guest's searches do
   not feed the owner's search feedback either, and a guest never migrates
   the schema.
 - **Every id carries the memory's name:** `b#72`, not `#72`. The name is the
   host name in lower case; `MEMORY_NAME` overrides it.
-- **A named id is checked, in both modes.** `zeige("b#72")` asked of any
+- **A named id is checked, in both modes.** `show("b#72")` asked of any
   memory other than `b` is refused instead of quietly returning that
   memory's own #72. Bare ids (`72`, `#72`) mean the memory being asked.
 
-`-s project` keeps the three extra tool definitions out of sessions that do
-not need them. The tools are then called `mcp__memory-b__recall` and so on.
+The guest speaks the language of the memory it reads, unless
+`MEMORY_LANG` says otherwise. `-s project` keeps the three extra tool
+definitions out of sessions that do not need them. The tools are then called `mcp__memory-b__recall` and so on.
 
 ## Two Opt-in Extensions
 
 The same server starts in two more modes. Each has its own file, its own
 tools and its own entry in Claude Code; the memory itself is never opened
-in them. Both follow `MEMORY_LANG=en` like the memory does. They grew out
+in them. Both follow `MEMORY_LANG` like the memory does. They grew out
 of daily use with several projects at once and have not been measured
 the way the memory has — they are offered because they made that work
 noticeably easier, not because a number says so.
 
-### Literature archive (`--archiv`)
+### Literature archive (`--archive`)
 
 Papers, datasets and prior work, shared by all projects. The memory
 holds what *you* found out; the archive holds what *others* published,
 and its value lies in the find another project already made.
 
 ```bash
-claude mcp add archive -s user -- uvx frugal-memory --archiv
+claude mcp add archive -s user -- uvx frugal-memory --archive
 ```
 
-- Same eight tools, other kinds: `befund` (finding), `methode` (method),
-  `ueberblick` (survey), `werkzeug` (code, dataset), `luecke` (searched,
-  nowhere measured), `spur` (unchecked lead) and `verworfen` (checked
-  and rejected — e.g. a citation a language model made up). Leads and
-  rejected entries are hidden from search, like the chronicle in the memory.
+- Same eight tools, other kinds: `finding`, `method`, `survey`,
+  `resource` (code, dataset), `gap` (searched, nowhere measured), `lead`
+  (unchecked) and `rejected` (checked and rejected — e.g. a citation a
+  language model made up). Leads and rejected entries are hidden from
+  search, like the chronicle in the memory.
 - **The same source is recognized by its id, not its wording.** When
   `remember` sees an arXiv number, DOI or link that is already in the
   archive, it says so — two projects rarely describe a paper in the same
   words. It also asks for the source and the evidence level (full text,
   abstract, unconfirmed) when they are missing.
-- Every id carries the name `archiv#12` (`archive#12` in English mode),
+- Every id carries the name `archive#12` (`archiv#12` in German mode),
   so it is never mistaken for a memory id.
 - File: `archive.db` next to the memory's, or `ARCHIVE_DB`. Several
   machines can share one archive by starting it over SSH on the machine
@@ -255,20 +260,20 @@ the criterion stood before the result.
 claude mcp add messbuch -s user -- uvx frugal-memory --messbuch
 ```
 
-- `reihen()` / `series()` lists open series with what needs a look:
-  *no entry for N days — is the process still running?*, *measurements
-  without result*, *no criterion*. A table across all series of one
-  topic is `reihen(kennung="vision/lr-*", tabelle=True)`.
-- `reihe_anlegen` / `new_series` **before** the first run. The criterion
-  gets a timestamp; after the first measurement it can only change with
-  a reason, and the change stays visible. Without a criterion the only
-  possible verdict is `beobachtung` (observation).
-- `rezept` / `recipe` records the command, code version, seed and
-  machine; `messwerte` / `measurements` one value per row;
-  `ergebnis` / `result` the verdict against the criterion and what
-  follows from it. Nothing is deleted; wrong values are superseded.
+- `series()` lists open series with what needs a look: *no entry for N
+  days — is the process still running?*, *measurements without result*,
+  *no criterion*. A table across all series of one topic is
+  `series(key="vision/lr-*", table=True)`.
+- `new_series` **before** the first run. The criterion gets a timestamp;
+  after the first measurement it can only change with a reason, and the
+  change stays visible. Without a criterion the only possible verdict is
+  `observation`.
+- `recipe` records the command, code version, seed and machine;
+  `measurements` one value per row; `result` the verdict against the
+  criterion and what follows from it. Nothing is deleted; wrong values
+  are superseded.
 - **Turn it on before your first series.** Entering old series after the
-  fact works (`nachtrag=`, `begonnen=` keep their real dates), but
+  fact works (`backfill=`, `started=` keep their real dates), but
   collecting them from scattered notes costs far more tokens than
   writing each one down when it happens.
 - File: `messbuch.db`, or `MESSBUCH_DB`. Memory ids written into the
@@ -279,17 +284,17 @@ claude mcp add messbuch -s user -- uvx frugal-memory --messbuch
 
 | | |
 |---|---|
-| `remember(text, tags, art, ersetzt)` | store an entry; reports similar existing ones and what it would supersede |
-| `recall(query, limit, art, marke, …)` | ranked full-text search, preview by default; under `marke=` it names a better match outside the project |
-| `zeige(ids, voll)` | full text of specific entries, about 6000 characters per call; what doesn't fit is listed with the call that fetches it |
-| `themen(marke, limit, seite, alle)` | browse: which projects exist, or one project's title lines, newest first, a page at a time |
-| `vergessen(ids, grund, rueckgaengig)` | mark as outdated — never deletes; `rueckgaengig=True` brings entries back |
-| `einordnen(ids, art)` | assign the knowledge kind of existing entries |
-| `verdichten(marke, art, …)` | find groups of entries that say much the same thing |
-| `pruefe(ids)` | opt-in: have a language model judge contradiction vs. newer state |
+| `remember(text, tags, kind, supersedes)` | store an entry; reports similar existing ones and what it would supersede |
+| `recall(query, limit, kind, tag, …)` | ranked full-text search, preview by default; under `tag=` it names a better match outside the project |
+| `show(ids, full)` | full text of specific entries, about 6000 characters per call; what doesn't fit is listed with the call that fetches it |
+| `topics(tag, limit, page, all)` | browse: which projects exist, or one project's title lines, newest first, a page at a time |
+| `forget(ids, reason, undo)` | mark as outdated — never deletes; `undo=True` brings entries back |
+| `classify(ids, kind)` | assign the knowledge kind of existing entries |
+| `consolidate(tag, kind, …)` | find groups of entries that say much the same thing |
+| `check(ids)` | opt-in: have a language model judge contradiction vs. newer state |
 
 Full reference with parameters and behavior: [docs/TOOLS.md](https://github.com/komakeule57-maker/frugal-memory/blob/main/docs/TOOLS.md).
-With `MEMORY_LANG=en` the same tools come with English names and parameters,
+With `MEMORY_LANG=de` the same tools come with German names and parameters,
 see [A Note on Language](#a-note-on-language).
 
 ## Some Numbers
@@ -324,7 +329,7 @@ the way — evidence from one installation, not a benchmark:
   70 % that line already is the entry sought; on real project questions
   it fires in 7–16 %.
 - **−83 % for a project's title index, −34 % for fetching eight full
-  texts**, from capping `themen` and `zeige`. On 110 project questions the
+  texts**, from capping `topics` and `show`. On 110 project questions the
   cap cost not one answer.
 
 Where a measurement did not survive a larger sample, it says so:
@@ -346,51 +351,56 @@ see [The Ranking Fix, Corrected Twice](https://github.com/komakeule57-maker/frug
 
 ## A Note on Language
 
-German is the default: tool names, status messages and the kind vocabulary
-(`schnittstelle`, `fallstrick`, `entscheidung`, `messwert`, `arbeitsweise`,
-`verlauf`, `gemischt`) are German, and the search stems German and splits
-German compounds.
+English is the default since 0.3.0: tool names, messages and the kind
+vocabulary are English, and the search uses a small English suffix stemmer.
 
-**English mode:** start the server with `MEMORY_LANG=en`. Then
+**German mode:** start the server with `MEMORY_LANG=de`. If your notes are
+in German, this is the better choice, and it is the mode all figures from
+real use in this README were measured in. (LoCoMo, a set of English
+conversations, gave 89.8 % in English mode and 89.7 % in German mode.) Then
 
-- the tools are `remember(text, tags, kind, supersedes)`,
-  `recall(query, limit, kind, tag, full, include_superseded)`, `show(ids, full)`,
-  `topics(tag, limit, page, all)`, `forget(ids, reason, undo)`, `classify(ids, kind)`,
-  `consolidate(tag, kind, threshold, groups)` and `check(ids)`,
-- the kinds are `interface`, `pitfall`, `decision`, `measurement`,
-  `workflow`, `history`, `unsorted`,
-- every message is English,
-- the search uses a small English suffix stemmer ("configured" finds
-  "configuring") instead of the German one, and does not split compounds.
+- the tools are `remember(text, tags, art, ersetzt)`,
+  `recall(query, limit, art, marke, voll, mit_veraltet)`, `zeige(ids, voll)`,
+  `themen(marke, limit, seite, alle)`, `vergessen(ids, grund, rueckgaengig)`,
+  `einordnen(ids, art)`, `verdichten(marke, art, schwelle, gruppen)` and
+  `pruefe(ids)`,
+- the kinds are `schnittstelle`, `fallstrick`, `entscheidung`, `messwert`,
+  `arbeitsweise`, `verlauf`, `gemischt`,
+- every message is German,
+- the search stems German and splits German compounds.
 
-The database itself does not change: kinds are always stored under their
-German names and translated at the border, and German kind names are
-accepted in both modes. What does change is the stem index, so the file
-records the language it was built in and the server refuses to open it
-with the other one. To switch an existing memory, back it up and run
-`MEMORY_LANG=en frugal-memory-nachziehen` once (from a checkout:
-`MEMORY_LANG=en python3 nachziehen.py`).
+**Existing memories keep their language.** Without `MEMORY_LANG`, the server
+speaks the language the file was built in — a new file starts in English,
+and a memory from before 0.3.0 stays German. So updating changes nothing
+unless you set the variable. The stem index is what ties a file to its
+language: the file records it, and the server refuses to open it with the
+other one. To switch an existing memory, back it up and run
+`MEMORY_LANG=en frugal-memory-nachziehen` once (or `MEMORY_LANG=de …`; from a
+checkout: `python3 nachziehen.py`). Kinds are stored under their German
+names in both modes and translated at the border; English kind names are
+accepted in German mode too.
 
-The two extensions follow the same switch: in English mode the archive's
-kinds are `finding`, `method`, `survey`, `resource`, `gap`, `lead` and
-`rejected`, and the notebook's tools are `series`, `new_series`,
-`edit_series`, `recipe`, `measurements` and `result`, with English
-statuses and verdicts. Their files store the German names, as the memory does.
+The two extensions follow the same switch: in German mode the archive's
+kinds are `befund`, `methode`, `ueberblick`, `werkzeug`, `luecke`, `spur`
+and `verworfen`, and the notebook's tools are `reihen`, `reihe_anlegen`,
+`reihe_aendern`, `rezept`, `messwerte` and `ergebnis`. The archive follows
+its own file like the memory does; the notebook stores the same data in
+both languages, so it follows `MEMORY_LANG` alone and is English without it.
 
 Not covered by the switch: the fact-check prompt stays German (it is
 calibrated word for word, and adding one sentence once halved its
 accuracy; only its verdicts are shown in English), and so do the import
-script and the measurement reports. The English stemmer is new and has
-**not** been measured on real questions the way the German search has.
+script and the measurement reports. The English stemmer has **not** been
+measured on real questions the way the German search has.
 
 ## Files
 
 | | |
 |---|---|
 | `memory_server.py` | MCP server, eight tools, search cascade, schema, migrations |
-| `morphologie.py` | stemmer and compound splitter (German; small English stemmer for `MEMORY_LANG=en`) |
-| `werkzeuge_en.py` | the English tool surface for `MEMORY_LANG=en` |
-| `messbuch.py` | the lab notebook (`--messbuch`) |
+| `morphologie.py` | stemmers: a small English one (default) and a German one with compound splitting (`MEMORY_LANG=de`) |
+| `werkzeuge_en.py` | the English tool surface (the default) |
+| `messbuch.py` | the lab notebook (`--messbuch`), German tools |
 | `messbuch_en.py` | its English tools and messages |
 | `texte_en.py` | English messages, keyed by the German text |
 | `nachziehen.py` | recomputes the derived columns, the word and tag directories and the chain marks (`frugal-memory-nachziehen` after pip install) |

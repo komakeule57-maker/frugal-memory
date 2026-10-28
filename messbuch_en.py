@@ -1,4 +1,4 @@
-"""English surface of the lab notebook (`--messbuch`) for MEMORY_LANG=en.
+"""English surface of the lab notebook (`--messbuch`) - the default since 0.3.0.
 
 Same pattern as werkzeuge_en.py and texte_en.py together: thin wrappers with
 English tool and parameter names around the German functions in messbuch.py,

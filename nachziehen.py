@@ -15,6 +15,9 @@ Nach jedem Eingriff laufen lassen, der `content` oder `tags` ausserhalb von
 
 --probe zeigt nur an, was sich aendern wuerde; --archiv nimmt sich das
 Literaturarchiv vor (archive.db bzw. ARCHIVE_DB) statt des Gedaechtnisses.
+
+Ohne MEMORY_LANG bleibt die Datei in ihrer Sprache (memory_server._sprache_folgen).
+Mit MEMORY_LANG in der anderen Sprache wird sie umgerechnet - so wechselt man.
 """
 
 import sys
@@ -31,7 +34,8 @@ def main() -> int:
     probe = "--probe" in sys.argv
     if "--archiv" in sys.argv or "--archive" in sys.argv:
         memory_server._archiv_einrichten()
-    # Rechnet ohnehin alles in der Sprache des Servers (MEMORY_LANG) neu, darf
+    # Rechnet ohnehin alles in der Sprache des Servers neu (MEMORY_LANG, sonst
+    # die der Datei), darf
     # also auch die Sprachmarke der Datei umschreiben. Mit --probe wird sie
     # wie alles andere zurueckgerollt.
     # Zurueckgesetzt wird im finally: wer main() aus einem laufenden Prozess

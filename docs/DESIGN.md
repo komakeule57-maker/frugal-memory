@@ -117,7 +117,7 @@ entered, and the guard only goes quiet on a tag once it carries
 new project does after three entries. Only something carrying more
 entries than the tag in question gets suggested as a neighbor — otherwise
 the guard would recommend yesterday's typo. Counting here is **exact by
-character**, unlike search: `recall(marke="mcp-memory")` deliberately
+character**, unlike search: `recall(tag="mcp-memory")` deliberately
 picks up `mcp-memory-server` too, but for the guard those are two
 spellings of the same thing, not confirmation. The index only narrows
 down, `_marken` verifies; counting stops at the threshold at the latest,
@@ -232,11 +232,11 @@ questions):
 | | schema 4 | schema 5 |
 |---|---:|---:|
 | `recall(query)` | 2.38 ms | **1.71 ms** |
-| `recall(marke=…)` | 2.72 ms | **1.72 ms** |
+| `recall(tag=…)` | 2.72 ms | **1.72 ms** |
 | `recall(art=…)` | 2.29 ms | **1.78 ms** |
-| `themen()` | 6.46 ms | **5.23 ms** |
+| `topics()` | 6.46 ms | **5.23 ms** |
 | `remember()` | 12.0 ms | **10.3 ms** |
-| `zeige()`, `verdichten()` | | same |
+| `show()`, `consolidate()` | | same |
 | file size | 3.71 MB | 3.65 MB |
 | the migration itself | | 128 ms, one-time |
 
@@ -293,9 +293,9 @@ frugal-memory-nachziehen [--probe]         # pip install
 tool call. If anything writes there, **every** call pays an fsync for it:
 during the rebuild, first an `INSERT OR IGNORE` into the kind vocabulary,
 then an `INSERT OR REPLACE` of the version number, each cost around
-5.5 ms — on everything, from `zeige` (0.7 ms) to `themen` (6.5 ms). The
+5.5 ms — on everything, from `show` (0.7 ms) to `topics` (6.5 ms). The
 telltale sign is the **constant** overhead across all tools, while
-`verdichten`, with its single connection, stays unchanged. Hence: read
+`consolidate`, with its single connection, stays unchanged. Hence: read
 first, then write only what's missing.
 
 **`kette` sits beside the text, not inside it** — nowadays as `kopf`/`nr`
@@ -394,7 +394,7 @@ The loop tolerates roughly 10 % wrong pairs and is worse than no loop at
    written in explicit FTS5 syntax, and everything in guest mode, neither
    collect nor fire.
 2. **A shared content word** between question and entry, or nothing is
-   stored. A `zeige` that merely looks something else up after a search is a
+   stored. A `show` that merely looks something else up after a search is a
    change of subject, not an answer.
 3. **Visibility.** The header says `(+ schon einmal so gesucht)` when the
    loop fired. A ranking that depends on earlier sessions is otherwise

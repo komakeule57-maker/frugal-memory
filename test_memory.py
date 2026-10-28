@@ -33,6 +33,8 @@ from pathlib import Path
 # Vor dem Import: das Board soll bei keinem remember angefragt werden. Sonst
 # kostet jeder Test die Vorprobe, und das Ergebnis haengt am Netz.
 os.environ["MEMORY_FC_AUS"] = "1"
+# Die Tests pruefen die deutschen Meldungen; die Vorgabe ist seit 0.3.0 Englisch.
+os.environ["MEMORY_LANG"] = "de"
 
 import import_memos as im  # noqa: E402
 import morphologie  # noqa: E402
@@ -1807,6 +1809,95 @@ def test_anweisung_nennt_nur_vorhandene_werkzeuge_und_parameter():
         for param in re.findall(r"\b(\w+)=\\?\"", anweisung):
             assert any(param in p for p in werkzeuge.values()), (umgebung, param)
         assert "frugal-memory-skill" in anweisung or betrieb
+
+
+def _start_ohne_sprache(memory_db, archive_db=None, betrieb="", nachziehen=False):
+    """Startet den Server in einem eigenen Prozess OHNE MEMORY_LANG und meldet
+    Sprache, Werkzeuge und Schema - wie ein Nutzer, der nur aktualisiert."""
+    import subprocess
+    ordner = tempfile.mkdtemp(prefix="sprachtest-")
+    umgebung = {k: v for k, v in os.environ.items() if k != "MEMORY_LANG"}
+    umgebung.update(MEMORY_FC_AUS="1", MEMORY_DB=str(memory_db),
+                    ARCHIVE_DB=str(archive_db or f"{ordner}/archive.db"),
+                    MESSBUCH_DB=f"{ordner}/messbuch.db")
+    probe = ("import json, contextlib, io, morphologie, memory_server as ms; "
+             + (f"ms._{betrieb}_einrichten(); " if betrieb else "")
+             + ("import nachziehen, sys; sys.argv = ['nachziehen']; "
+                "contextlib.redirect_stdout(io.StringIO()).__enter__(); nachziehen.main(); "
+                "sys.stdout = sys.__stdout__; " if nachziehen else "")
+             + "print(json.dumps([morphologie.SPRACHE, ms.server.instructions[:40],"
+             " {t.name: t.parameters for t in ms.server._tool_manager.list_tools()}]))")
+    aus = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, check=True,
+                         env=umgebung, cwd=Path(__file__).resolve().parent).stdout
+    return json.loads(aus.strip().splitlines()[-1])
+
+
+def test_ohne_memory_lang_beginnt_ein_neues_gedaechtnis_englisch():
+    """Seit 0.3.0 ist Englisch die Vorgabe - fuer neue Dateien."""
+    sprache, anweisung, werkzeuge = _start_ohne_sprache(ms.DB_PATH.parent / "neu.db")
+    assert sprache == "en", sprache
+    assert {"remember", "recall", "show", "topics", "forget", "classify"} <= set(werkzeuge), werkzeuge
+    assert "zeige" not in werkzeuge and anweisung.startswith("Memory"), anweisung
+
+
+def test_ohne_memory_lang_bleibt_ein_deutsches_gedaechtnis_deutsch():
+    """Wer ohne MEMORY_LANG aktualisiert, darf nichts merken: ein deutsch
+    gerechneter Bestand wuerde unter dem englischen Stemmer abgewiesen, und
+    nachziehen.py rechnete ihn ungefragt auf englische Staemme um."""
+    ms.remember("Der Kompressor brummt nachts.", tags="werkstatt", art="fallstrick")
+    sprache, _, werkzeuge = _start_ohne_sprache(ms.DB_PATH)
+    assert sprache == "de" and "zeige" in werkzeuge and "show" not in werkzeuge, (sprache, werkzeuge)
+    sprache, _, _ = _start_ohne_sprache(ms.DB_PATH, nachziehen=True)
+    assert sprache == "de", sprache
+    conn = sqlite3.connect(ms.DB_PATH)
+    try:
+        assert conn.execute("SELECT wert FROM schema WHERE schluessel = 'sprache'").fetchone() == ("de",)
+    finally:
+        conn.close()
+    assert "#1" in ms.recall("Kompressoren"), "die deutsche Stammsuche ist hinueber"
+
+
+def test_ein_bestand_ohne_sprachmarke_gilt_als_deutsch():
+    """Vor dem Sprachschalter gab es keine Marke - und nur deutsche Bestaende."""
+    ms.remember("Alter Eintrag.", tags="probe", art="verlauf")
+    conn = sqlite3.connect(ms.DB_PATH)
+    conn.execute("DELETE FROM schema WHERE schluessel = 'sprache'")
+    conn.commit()
+    conn.close()
+    assert ms._sprache_der_datei(ms.DB_PATH) == "de"
+    assert ms._sprache_der_datei(ms.DB_PATH.parent / "gibt-es-nicht.db") is None
+
+
+def test_das_archiv_folgt_seiner_eigenen_datei():
+    """Die Sprache beim Import kommt aus memory.db; das Archiv hat seine eigene."""
+    archiv = ms.DB_PATH.parent / "archive.db"
+    conn = sqlite3.connect(archiv)
+    conn.execute("CREATE TABLE schema (schluessel TEXT PRIMARY KEY, wert TEXT)")
+    conn.execute("INSERT INTO schema VALUES ('sprache', 'de')")
+    conn.commit()
+    conn.close()
+    sprache, _, werkzeuge = _start_ohne_sprache(ms.DB_PATH.parent / "neu.db", archive_db=archiv,
+                                                betrieb="archiv")
+    assert sprache == "de" and "zeige" in werkzeuge, (sprache, werkzeuge)
+    assert "befund" in werkzeuge["remember"]["properties"]["art"]["enum"]
+
+
+def test_die_arten_stehen_als_auswahl_im_schema():
+    """Glama und jedes Modell sehen die Auswahl, statt sie aus dem Text zu lesen."""
+    _, _, werkzeuge = _start_ohne_sprache(ms.DB_PATH.parent / "neu.db")
+    assert werkzeuge["remember"]["properties"]["kind"]["enum"] == [
+        "interface", "pitfall", "decision", "measurement", "workflow", "history"]
+    assert werkzeuge["classify"]["properties"]["kind"]["enum"][-1] == "unsorted"
+    assert "enum" not in werkzeuge["recall"]["properties"]["kind"], "recall nimmt Listen und 'all'"
+    ms.remember("Etwas.", tags="probe", art="verlauf")
+    _, _, werkzeuge = _start_ohne_sprache(ms.DB_PATH)
+    assert werkzeuge["einordnen"]["properties"]["art"]["enum"][0] == "schnittstelle"
+
+
+def test_vergessen_nennt_unbekannte_nummern():
+    ms.remember("Etwas.", tags="probe", art="verlauf")
+    aus = ms.vergessen("1,77")
+    assert "#1" in aus and "nicht gefunden: #77" in aus, aus
 
 
 def test_gast_bekommt_keine_anweisung():

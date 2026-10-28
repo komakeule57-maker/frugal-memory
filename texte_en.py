@@ -1,4 +1,4 @@
-"""English messages for MEMORY_LANG=en.
+"""English messages - the default since 0.3.0 (MEMORY_LANG=en, or unset).
 
 Key = the German template as it stands in memory_server.py (gettext style),
 value = the English template with the same {placeholders}. A missing key

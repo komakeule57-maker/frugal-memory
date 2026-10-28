@@ -1,11 +1,11 @@
-"""English tool surface for MEMORY_LANG=en.
+"""English tool surface - the default since 0.3.0 (MEMORY_LANG=en, or unset).
 
 Thin wrappers: English tool and parameter names, English descriptions, the
 work is done by the German functions in memory_server.py. Messages come out
 in English because memory_server._t() follows the same switch. Kinds are
 mapped at the border (pitfall <-> fallstrick); the database is unchanged.
 
-Registered by memory_server._englisch_einrichten() instead of the German tools - a
+Registered by memory_server._sprache_einrichten() instead of the German tools - a
 session sees one set, never both.
 """
 
@@ -13,23 +13,26 @@ import memory_server as ms
 
 
 def remember(text: str, tags: str = "", kind: str = "", supersedes: str = "") -> str:
-    """Stores a text permanently in memory.
+    """Stores one fact permanently in memory.
 
-    Reports back which existing entries resemble the new one - so
-    contradictions get noticed instead of silently sitting side by side.
+    Use it for knowledge a later session needs: a decision with its reason, a
+    pitfall, a measured number, an interface. Not for secrets, guesses or
+    short-lived details. Search with recall first; if an entry covers the fact,
+    supersede that one.
+
+    Returns the new id, existing entries that resemble it (candidates to
+    supersede) and a note when the tag is new - often a misspelling.
 
     Args:
-        text: The content to remember.
-        tags: Optional keywords, separated by spaces or commas. Convention:
-            the project, i.e. WHERE the knowledge belongs.
-        kind: WHICH KIND of knowledge - exactly one of: interface (signature,
-            file name, command, data format), pitfall (the obvious approach is
-            wrong because ...), decision (made this way, with rationale),
-            measurement (a number plus its measurement criterion), workflow
-            (how to work with this user), history (chronicle - excluded from
-            recall's default view).
-        supersedes: Ids of outdated entries that this one replaces (e.g.
-            "12,34"). They are not deleted, only removed from the default view.
+        text: The fact. A text that belongs to two kinds is two entries.
+        tags: The project, i.e. WHERE the knowledge belongs (spaces or commas
+            between several).
+        kind: WHICH KIND of knowledge: interface (signature, file name,
+            command, data format), pitfall (the obvious approach is wrong
+            because ...), decision (with rationale), measurement (a number plus
+            its criterion), workflow (how to work with this user), history
+            (chronicle, hidden from recall's default view). Empty = unsorted.
+        supersedes: Ids this entry replaces, e.g. "12,34". Hidden, not deleted.
     """
     return ms.remember(text, tags=tags, art=kind, ersetzt=supersedes)
 
@@ -42,14 +45,15 @@ def recall(
     full: bool = False,
     include_superseded: bool = False,
 ) -> str:
-    """Searches memory via full-text search, best matches first.
+    """Searches memory by words, best matches first.
 
-    Also finds inflected forms ("configured" -> "configuring", "studies" ->
-    "study").
+    Use it first, before searching files or the web for something noted before.
+    It matches words, not meaning: inflected forms count ("configured" ->
+    "configuring"), synonyms don't - if nothing fits, retry in the other
+    language your notes may use. No search terms? Browse with topics.
 
-    By default returns a PREVIEW per hit (id, kind, date, title line). Get
-    the full text of the interesting ones afterwards with show("376,481") -
-    or set full=True right away if the question is narrow enough.
+    Returns a preview per hit (id, kind, date, title line). Read the ones you
+    need with show("376,481"), or set full=True for a narrow question.
 
     Args:
         query: Search term(s), FTS5 syntax allowed (e.g. "sqlite AND fts5", "proj*").
@@ -73,12 +77,13 @@ def recall(
 def show(ids: str, full: bool = False) -> str:
     """Returns the named entries in full text.
 
-    Counterpart to recall's preview: first see which entry is meant, then
-    read only that one. Superseded entries are included - whoever asks for
-    the id means that one.
+    Use it after recall or topics, once you know which entries you need - it
+    takes ids, not search terms. Superseded entries are included: whoever asks
+    for the id means that one.
 
-    One call returns about 6000 characters, in the order asked. Whatever
-    doesn't fit comes back as a title line plus the call that fetches it.
+    Returns about 6000 characters per call, in the order asked. Whatever doesn't
+    fit comes back as a title line plus the call that fetches it; unknown ids
+    are named as such.
 
     Args:
         ids: One or more entry ids, e.g. "376,481". Most wanted first.
@@ -88,12 +93,14 @@ def show(ids: str, full: bool = False) -> str:
 
 
 def topics(tag: str = "", limit: int = 0, page: int = 1, all: bool = False) -> str:
-    """Shows which projects exist - or the title index of one project.
+    """Browses memory: the board of all tags, or the title index of one project.
 
-    Counterpart to recall: that searches for words, this browses. Without an
-    argument, the tag board (which project, how many entries, split by kind);
-    with an argument, that project's title lines, newest first, one page at
-    a time. Follow up with recall(query, tag="...") or straight to show("...").
+    Use it when search terms are missing - a project picked up after months,
+    or "what happened here lately". To find a specific fact, recall is faster.
+
+    Returns the tag board (entries per tag and kind) or, with a tag, that
+    project's title lines, newest first, one page at a time. Follow up with
+    show("...") or recall(query, tag="...").
 
     Args:
         tag: Project, e.g. "spaceship". Empty = tag board.
@@ -108,9 +115,11 @@ def consolidate(tag: str = "", kind: str = "all", threshold: float = 0.5,
                 groups: int = 5) -> str:
     """Finds groups of entries that say largely the same thing.
 
-    Does not summarize anything itself - that is a judgment call. The tool
-    delivers the groups; the caller writes a new entry and supersedes the old
-    ones via remember(..., supersedes="...").
+    Use it for tidying up. Read-only: merging is a judgment call - replace a
+    group by one new entry via remember(..., supersedes="...").
+
+    Returns the groups found, with their entries (id, kind, date, title) and
+    how similar they are.
 
     Args:
         tag: Only consider entries from this project (empty = all). Sub-tags
@@ -125,16 +134,19 @@ def consolidate(tag: str = "", kind: str = "all", threshold: float = 0.5,
 def check(ids: str) -> str:
     """Has a small language model judge how the named entries relate.
 
-    Counterpart to consolidate: that one finds groups by word overlap, this
-    one says whether a CONTRADICTION is behind it, PROGRESS (a newer state),
-    or nothing (INDEPENDENT). Not authoritative: measured 67 % correct on 70
-    German pairs; the result says where to look, not what is true. Each pair
-    is asked in both directions; disagreement is reported as "disputed". At
-    most 5 pairs per call.
+    Use it on a group from consolidate, or on two entries that seem to disagree,
+    to ask whether a CONTRADICTION is behind it, PROGRESS (a newer state), or
+    nothing (INDEPENDENT). Not authoritative: measured 67 % correct on 70 German
+    pairs, so the result says where to look, not what is true.
+
+    Returns one line per pair. Each pair is asked in both directions; only what
+    comes back the same both times is reported, otherwise "disputed". At most
+    5 pairs per call, roughly 10 seconds each.
 
     Opt-in: needs MEMORY_FC_URL and MEMORY_FC_MODELL (any OpenAI-compatible
     endpoint; MEMORY_FC_SCHLUESSEL if it wants a key). Without them this tool
-    does nothing. When set up, up to 200 characters of each note are sent there.
+    does nothing and says so. When set up, up to 200 characters of each note
+    are sent there.
 
     Args:
         ids: Two or more entry ids, e.g. "249,255".
@@ -143,10 +155,13 @@ def check(ids: str) -> str:
 
 
 def forget(ids: str, reason: str = "", undo: bool = False) -> str:
-    """Marks entries as superseded, without a replacement.
+    """Hides entries that are wrong or obsolete and have no replacement.
 
-    They disappear from recall's default view but remain findable with
-    include_superseded=True. Nothing is deleted.
+    If a newer entry replaces them, use remember(..., supersedes=...) instead.
+    Nothing is deleted: show and recall(..., include_superseded=True) still
+    find them, undo=True brings them back.
+
+    Returns the ids changed and names unknown ones.
 
     Args:
         ids: One or more entry ids, e.g. "12,34".
@@ -159,8 +174,10 @@ def forget(ids: str, reason: str = "", undo: bool = False) -> str:
 def classify(ids: str, kind: str) -> str:
     """Sets the kind of knowledge for existing entries.
 
-    Meant for doing in passing: whatever recall surfaces anyway gets its kind
-    on the way. The backlog does not have to be sorted in one sitting.
+    Use it in passing on entries recall shows as "unsorted"; the backlog need
+    not be sorted in one sitting. Changes only the kind.
+
+    Returns the ids changed, unknown ids and how many are still unsorted.
 
     Args:
         ids: One or more entry ids, e.g. "376,481".

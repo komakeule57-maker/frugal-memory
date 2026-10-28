@@ -16,7 +16,8 @@ from pathlib import Path
 
 os.environ["MEMORY_FC_AUS"] = "1"
 os.environ["MEMORY_NAME"] = "werkbank"   # der Name, den die Meldung zur nackten Nummer vorschlaegt
-os.environ.pop("MEMORY_LANG", None)
+# Die Tests pruefen die deutschen Meldungen; die Vorgabe ist seit 0.3.0 Englisch.
+os.environ["MEMORY_LANG"] = "de"
 import messbuch as mb  # noqa: E402
 
 HIER = Path(__file__).resolve().parent

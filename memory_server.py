@@ -54,6 +54,52 @@ def _db_pfad(hier: Path | None = None, datei: str = "memory.db",
 
 DB_PATH = _db_pfad()
 
+
+def _sprache_der_datei(pfad: Path) -> str | None:
+    """In welcher Sprache ein vorhandener Bestand gerechnet ist; None, wenn es keinen gibt.
+
+    Die Marke schreibt `_sprache_pruefen` bei der ersten Verbindung. Ein
+    Bestand ohne Marke stammt von vor dem Sprachschalter und ist deutsch.
+    Nur lesend geoeffnet - auch ein Gast darf hier nachsehen.
+    """
+    pfad = Path(pfad)
+    try:
+        if not pfad.is_file() or pfad.stat().st_size == 0:
+            return None
+        conn = sqlite3.connect(f"{pfad.resolve().as_uri()}?mode=ro", uri=True, timeout=5)
+    except (OSError, sqlite3.Error):
+        return None
+    try:
+        tabellen = {z[0] for z in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        if "schema" in tabellen:
+            zeile = conn.execute("SELECT wert FROM schema WHERE schluessel = 'sprache'").fetchone()
+            if zeile:
+                return zeile[0]
+        for tabelle in ("eintrag", "mem"):  # mem: Schemastand vor 5
+            if tabelle in tabellen and conn.execute(f"SELECT 1 FROM {tabelle} LIMIT 1").fetchone():
+                return "de"
+        return None
+    except sqlite3.Error:
+        return None
+    finally:
+        conn.close()
+
+
+def _sprache_folgen(pfad: Path) -> None:
+    """Ohne MEMORY_LANG spricht der Server die Sprache des vorhandenen Bestands.
+
+    Seit 0.3.0 ist Englisch die Vorgabe - aber nur fuer neue Dateien. Ein
+    deutsch gerechnetes Gedaechtnis wuerde unter dem englischen Stemmer
+    abgewiesen (`_sprache_pruefen`), und `nachziehen.py` rechnete es ungefragt
+    auf englische Staemme um. Wer ohne MEMORY_LANG aktualisiert, merkt also
+    nichts; wer es setzt, bekommt genau das.
+    """
+    if not morphologie.SPRACHE_FEST:
+        morphologie.SPRACHE = _sprache_der_datei(pfad) or "en"
+
+
+_sprache_folgen(DB_PATH)
+
 # Wie dieses Gedaechtnis heisst. Auf mehreren Rechnern liegen mehrere
 # Gedaechtnisse, und jedes zaehlt seine Eintraege von 1 an: `#72` hier ist ein
 # anderer Eintrag als `#72` nebenan (#2386). Eine Nummer ist deshalb erst mit
@@ -206,8 +252,9 @@ LAENGE_HINWEIS = 900
 LAENGE_HINWEIS_ARCHIV = 3000
 
 # --------------------------------------------------------------------------
-# Sprache: MEMORY_LANG=en schaltet Werkzeugnamen, Meldungen, Art-Namen und den
-# Stemmer auf Englisch. Die Datenbank bleibt dieselbe: die Arten stehen dort
+# Sprache: MEMORY_LANG=de schaltet Werkzeugnamen, Meldungen, Art-Namen und den
+# Stemmer auf Deutsch (Vorgabe seit 0.3.0: Englisch, ohne MEMORY_LANG die
+# Sprache des vorhandenen Bestands - siehe _sprache_folgen). Die Datenbank bleibt dieselbe: die Arten stehen dort
 # immer deutsch, uebersetzt wird nur an der Grenze nach aussen.
 # Die eine Quelle ist morphologie.SPRACHE - der Stemmer muss dieselbe Sprache
 # sprechen wie die Meldungen, sonst driftet der Index (siehe _sprache_pruefen).
@@ -281,7 +328,7 @@ _TRENNER = re.compile(r"[\s,]+")
 
 # Die einzige Stelle mit der Versionsnummer: pyproject.toml liest sie von hier,
 # und der Server meldet sie jedem Client beim Verbinden (serverInfo).
-__version__ = "0.2.3"
+__version__ = "0.3.0"
 
 # Die Arbeitsregeln in Kurzform. Claude Code legt sie jeder Sitzung bei, in
 # der der Server eingebunden ist - auch dort, wo nur `uvx frugal-memory`
@@ -1470,25 +1517,28 @@ def _quellenhinweise(art: str, text: str, quellen: list, gleiche: list) -> list:
 
 @_schreibend
 def remember(text: str, tags: str = "", art: str = "", ersetzt: str = "") -> str:
-    """Stores a text permanently in memory.
+    """Stores one fact permanently in memory.
 
-    Reports back which existing entries resemble the new one - so
-    contradictions get noticed instead of silently sitting side by side.
+    Use it for knowledge a later session needs: a decision with its reason, a
+    pitfall, a measured number, an interface. Not for secrets, guesses or
+    short-lived details. Search with recall first; if an entry covers the fact,
+    supersede that one.
+
+    Returns the new id, existing entries that resemble it (candidates to
+    supersede) and a note when the tag is new - often a misspelling.
 
     Args:
-        text: The content to remember.
-        tags: Optional keywords, separated by spaces or commas. Convention:
-            the project, i.e. WHERE the knowledge belongs.
+        text: The fact. A text that belongs to two kinds is two entries.
+        tags: The project, i.e. WHERE the knowledge belongs (spaces or commas
+            between several).
         art: WHICH KIND of knowledge - exactly one of: schnittstelle
             (interface: signature, file name, command, data format),
             fallstrick (pitfall: the obvious approach is wrong because ...),
             entscheidung (decision, made this way, with rationale), messwert
             (measurement: a number plus its measurement criterion),
             arbeitsweise (way of working), verlauf (chronicle - excluded
-            from recall's default view).
-        ersetzt: Ids of outdated entries that this one supersedes (e.g.
-            "12,34"). They are not deleted, only removed from the default
-            view.
+            from recall's default view). Empty = gemischt (unsorted).
+        ersetzt: Ids this entry supersedes, e.g. "12,34". Hidden, not deleted.
     """
     text = text.strip()
     if not text:
@@ -1818,18 +1868,17 @@ def _dubletten(conn, text: str, ausser: int, schwelle: float = 0.55) -> list:
 def verdichten(marke: str = "", art: str = "alle", schwelle: float = 0.5, gruppen: int = 5) -> str:
     """Finds groups of entries that say largely the same thing.
 
-    Does not summarize anything itself - that's a judgment call. The tool
-    delivers the groups; the caller writes a new entry and supersedes the old
-    ones via remember(..., ersetzt="...").
+    Use it for tidying up. Read-only: merging is a judgment call - replace a
+    group by one new entry via remember(..., ersetzt="...").
+
+    Returns the groups found, with their entries (id, kind, date, title) and
+    how similar they are.
 
     Args:
         marke: Only consider entries from this project (empty = all). Same
             reading as recall and themen: the tag is searched as a phrase in
             the tag field, so multi-tagged entries and sub-tags are included
-            ("spiel3d-test" also matches "spiel3d-test Nachtfrost"). Used to
-            be called `tags` and compared the whole tag column for equality -
-            that silently missed exactly the specifically tagged entries
-            where duplicates tend to sit (#1448).
+            ("spiel3d-test" also matches "spiel3d-test Nachtfrost").
         art: Only consider entries of this kind/these kinds. Default "alle"
             (all) - for consolidation the chronicle is the most worthwhile
             case; art="verlauf" tackles it on its own.
@@ -1928,31 +1977,21 @@ def verdichten(marke: str = "", art: str = "alle", schwelle: float = 0.5, gruppe
 
 @_lesend
 def pruefe(ids: str) -> str:
-    """Has a small language model judge how the named entries relate to each other.
+    """Has a small language model judge how the named entries relate.
 
-    Counterpart to verdichten (consolidate): that one finds groups by word
-    overlap, this one says whether a contradiction is behind it or just a
-    newer state of affairs. All pairs from the named ids are judged.
+    Use it on a group from verdichten, or on two entries that seem to disagree,
+    to ask whether a CONTRADICTION is behind it, PROGRESS (a newer state), or
+    nothing (INDEPENDENT). Not authoritative: measured 67 % correct on 70 German
+    pairs, so the result says where to look, not what is true.
 
-    Does NOT judge authoritatively. Measured against 70 pairs: 67 % correct,
-    9 % false contradiction alarms, but only 2 of 6 real ones caught - and
-    the model says FORTSCHRITT (progress) in 50 of 70 cases. The result says where to look
-    closer, not what the actual case is.
+    Returns one line per pair. Each pair is asked in both directions; only what
+    comes back the same both times is reported, otherwise "uneinig" (disputed). At most
+    5 pairs per call, roughly 10 seconds each.
 
-    Each pair is asked in BOTH directions, and only what comes back the same
-    both times is reported; otherwise it says "uneinig" (disputed/unclear).
-    Without this, the order of the supplied ids would influence the outcome
-    (measured: 2 of 5 pairs were symmetric). This costs double, i.e. roughly
-    10 seconds per pair, which is why the cap is 5 pairs asked per call.
-
-    Opt-in: needs MEMORY_FC_URL and MEMORY_FC_MODELL pointing at any
-    OpenAI-compatible endpoint (local model, LAN device, or cloud provider;
-    MEMORY_FC_SCHLUESSEL for providers that want a key). Without both set,
-    this tool does nothing and says so - there are no defaults, so nothing is
-    contacted unless it was set up deliberately. Note that when it IS set up,
-    up to 200 characters of each note are sent to that endpoint. If it is
-    unreachable, the tool says so and returns nothing - all other tools are
-    unaffected.
+    Opt-in: needs MEMORY_FC_URL and MEMORY_FC_MODELL (any OpenAI-compatible
+    endpoint; MEMORY_FC_SCHLUESSEL if it wants a key). Without them this tool
+    does nothing and says so. When set up, up to 200 characters of each note
+    are sent there.
 
     Args:
         ids: Two or more entry ids, e.g. "249,255".
@@ -2047,10 +2086,13 @@ def pruefe(ids: str) -> str:
 
 @_schreibend
 def vergessen(ids: str, grund: str = "", rueckgaengig: bool = False) -> str:
-    """Marks entries as outdated, without a replacement.
+    """Hides entries that are wrong or obsolete and have no replacement.
 
-    They disappear from recall's default view but remain findable with
-    mit_veraltet=True. Nothing is deleted.
+    If a newer entry replaces them, use remember(..., ersetzt=...) instead.
+    Nothing is deleted: zeige and recall(..., mit_veraltet=True) still find
+    them, rueckgaengig=True brings them back.
+
+    Returns the ids changed and names unknown ones.
 
     Args:
         ids: One or more entry ids, e.g. "12,34".
@@ -2086,7 +2128,11 @@ def vergessen(ids: str, grund: str = "", rueckgaengig: bool = False) -> str:
         return "\n".join(aus)
     if not getan:
         return _t("Keine passenden Ids gefunden - nichts geaendert.")
-    return _t("Als veraltet markiert: {ids}", ids=", ".join("#" + str(i) for i in getan))
+    aus = _t("Als veraltet markiert: {ids}", ids=", ".join("#" + str(i) for i in getan))
+    fehlt = [i for i in _ids(ids) if i not in getan]
+    if fehlt:
+        aus += _t(" (nicht gefunden: {ids})", ids=", ".join("#" + str(i) for i in fehlt))
+    return aus
 
 
 @_lesend
@@ -2098,14 +2144,16 @@ def recall(
     voll: bool = False,
     mit_veraltet: bool = False,
 ) -> str:
-    """Searches memory via full-text search, best matches first.
+    """Searches memory by words, best matches first.
 
-    Also finds inflected forms ("Rangliste" -> "Ranglisten"/rankings) and
-    word parts of compounds ("Katalysator" -> "Fusionskatalysator").
+    Use it first, before searching files or the web for something noted before.
+    It matches words, not meaning: inflected forms ("Rangliste" -> "Ranglisten")
+    and word parts of compounds ("Katalysator" -> "Fusionskatalysator") count,
+    synonyms don't - if nothing fits, retry in the other language your notes
+    may use. No search terms? Browse with themen.
 
-    By default returns a PREVIEW per hit (id, kind, date, title line). Get
-    the full text of the interesting ones afterwards with zeige("376,481") -
-    or set voll=True right away if the question is narrow enough.
+    Returns a preview per hit (id, kind, date, title line). Read the ones you
+    need with zeige("376,481"), or set voll=True for a narrow question.
 
     Args:
         query: Search term(s), FTS5 syntax allowed (e.g. "sqlite AND fts5", "proj*").
@@ -2569,23 +2617,15 @@ def _kaskade_roh(conn, query: str, limit: int, filter_=("", ()),
 
 @_lesend
 def themen(marke: str = "", limit: int = 0, seite: int = 1, alle: bool = False) -> str:
-    """Shows which projects exist - or the title index of one project.
+    """Browses memory: the board of all tags, or the title index of one project.
 
-    Counterpart to recall: that searches for words, this browses. Without an
-    argument, the tag board (which project, how many entries, how they're
-    distributed across kinds of knowledge); with an argument, that project's
-    title lines, newest first, one page at a time - the last line says how
-    many more there are and how to get them. Page 1 answers "what happened
-    here lately"; for anything older use recall(query, marke="...").
+    Use it when search terms are missing - a project picked up after months,
+    or "what happened here lately". To find a specific fact, recall is faster.
 
-    What this is for: recall only finds what you already know to ask for.
-    Someone picking a project back up after months doesn't remember the
-    terms anymore - and needs a list first, from which to pull up the entry.
-    Follow up with `recall(query, marke="...")` or straight to `zeige("...")`.
-
-    Outdated entries don't count, as everywhere in the default view. The
-    chronicle does count here though: when browsing it's the scaffolding,
-    not the filler that drowns out every search.
+    Returns the tag board (entries per tag and kind) or, with a tag, that
+    project's title lines, newest first, one page at a time. The chronicle
+    counts here: when browsing it is the scaffolding. Follow up with
+    zeige("...") or recall(query, marke="...").
 
     Args:
         marke: Project, e.g. "raumschiff-project". Empty = tag board.
@@ -2711,14 +2751,14 @@ def themen(marke: str = "", limit: int = 0, seite: int = 1, alle: bool = False) 
 def zeige(ids: str, voll: bool = False) -> str:
     """Returns the named entries in full text.
 
-    Counterpart to recall's preview: first see which entry is meant, then
-    read only that one. Outdated entries are explicitly included here -
-    whoever asks for the id means that one too, even if it's outdated.
+    Use it after recall or themen, once you know which entries you need - it
+    takes ids, not search terms. Superseded entries are included: whoever asks
+    for the id means that one.
 
-    One call returns about 6000 characters of full text, in the order asked.
-    Whatever doesn't fit comes back as a title line plus the call that
-    fetches it - nothing is dropped silently. The pieces of one cut-up memo
-    are never separated.
+    Returns about 6000 characters per call, in the order asked. Whatever doesn't
+    fit comes back as a title line plus the call that fetches it - nothing is
+    dropped silently, and the pieces of one cut-up memo are never separated.
+    Unknown ids are named as such.
 
     Args:
         ids: One or more entry ids, e.g. "376,481". Most wanted first.
@@ -2825,9 +2865,10 @@ def _gekappt(content: str, rid) -> str:
 def einordnen(ids: str, art: str) -> str:
     """Sets the kind of knowledge for existing entries.
 
-    Meant for doing in passing: whatever recall surfaces anyway gets its
-    kind assigned along the way. The backlog doesn't have to be sorted in
-    one sitting.
+    Use it in passing on entries recall shows as "gemischt" (unsorted); the
+    backlog need not be sorted in one sitting. Changes only the kind.
+
+    Returns the ids changed, unknown ids and how many are still unsorted.
 
     Args:
         ids: One or more entry ids, e.g. "376,481".
@@ -2927,38 +2968,81 @@ def _gast_einrichten() -> None:
             werkzeuge.remove_tool(werkzeug.name)
 
 
-def _englisch_einrichten() -> None:
-    """MEMORY_LANG=en: die englischen Huellen statt der deutschen Werkzeuge anbieten.
+# Die deutschen Werkzeuge, wie die Dekoratoren sie angemeldet haben - gemerkt
+# beim ersten Tausch, damit das Archiv auch zurueck auf Deutsch kann.
+_DEUTSCHE_WERKZEUGE: list = []
+
+
+def _sprache_einrichten() -> None:
+    """Bietet die Werkzeuge in der Sprache des Servers an (morphologie.SPRACHE).
 
     Austauschen statt dazustellen - beide Saetze zugleich kosteten in jeder
     Sitzung die doppelte Werkzeugbeschreibung und luden zum Mischen ein.
+    Laeuft beim Import fuer das Gedaechtnis und noch einmal in
+    `_archiv_einrichten`, falls das Archiv in der anderen Sprache angelegt ist.
     """
     # Als Skript gestartet heisst dieses Modul `__main__`. Die Huellen holen
     # sich `memory_server` - ohne den Eintrag hier luede Python die Datei ein
     # zweites Mal, und deren Start griffe auf das halb geladene werkzeuge_en zu
     # (AttributeError: WERKZEUGE). Der Server startete mit MEMORY_LANG=en nicht.
     sys.modules.setdefault("memory_server", sys.modules[__name__])
-    import werkzeuge_en
-    verwaltung = _sdk_intern()[0]
-    for werkzeug in list(verwaltung.list_tools()):
-        verwaltung.remove_tool(werkzeug.name)
-    for fn in werkzeuge_en.WERKZEUGE:
-        server.tool()(fn)
+    verwaltung, kern = _sdk_intern()
+    vorhanden = verwaltung.list_tools()
+    if not _DEUTSCHE_WERKZEUGE and any(w.name == "zeige" for w in vorhanden):
+        _DEUTSCHE_WERKZEUGE.extend(w.fn for w in vorhanden)
+    if _en():
+        import werkzeuge_en
+        gewollt = list(werkzeuge_en.WERKZEUGE)
+    else:
+        gewollt = list(_DEUTSCHE_WERKZEUGE)
+    kern.instructions = ANWEISUNG_EN if _en() else ANWEISUNG
+    if gewollt and {w.name for w in vorhanden} != {fn.__name__ for fn in gewollt}:
+        for werkzeug in vorhanden:
+            verwaltung.remove_tool(werkzeug.name)
+        for fn in gewollt:
+            server.tool()(fn)
+    _schema_entrumpeln()
+    _arten_im_schema()
 
 
-if _en():
-    _englisch_einrichten()
-_schema_entrumpeln()
+def _arten_im_schema() -> None:
+    """Schreibt die erlaubten Arten als `enum` ins Schema von remember und einordnen.
+
+    Dann sieht das Modell die Auswahl, statt sie aus dem Fliesstext zu lesen.
+    Nur ein Hinweis an den Client: geprueft wird weiter in `_art_ein`, das
+    auch die Namen der anderen Sprache annimmt. recall und verdichten bleiben
+    frei, dort sind Listen ("fallstrick,entscheidung") und "alle" erlaubt.
+    """
+    try:
+        werkzeuge = _sdk_intern()[0].list_tools()
+    except (AttributeError, RuntimeError):
+        return
+    feld = "kind" if _en() else "art"
+    for werkzeug in werkzeuge:
+        if werkzeug.name not in ("remember", "einordnen", "classify"):
+            continue
+        eigenschaft = werkzeug.parameters.get("properties", {}).get(feld)
+        if not isinstance(eigenschaft, dict):
+            continue
+        arten = list(ARTEN) + ([UNSORTIERT] if werkzeug.name != "remember" else [])
+        eigenschaft["enum"] = [_art_aus(a) for a in arten]
+
+
+_sprache_einrichten()
 
 
 def _messbuch_einrichten() -> None:
     """`--messbuch`: statt des Gedaechtnisses das Messbuch anbieten (messbuch.py).
 
     Eigene Datei, eigene Werkzeuge; memory.db wird in dieser Betriebsart nie
-    geoeffnet. Derselbe Kniff wie bei `_englisch_einrichten`: messbuch.py
+    geoeffnet. Derselbe Kniff wie bei `_sprache_einrichten`: messbuch.py
     importiert `memory_server`, und das ist hier `__main__`.
     """
     sys.modules.setdefault("memory_server", sys.modules[__name__])
+    # Die Datei des Messbuchs ist in jeder Sprache dieselbe (deutsch gespeichert),
+    # ihr laesst sich also nicht folgen - und memory.db hat hier nichts zu sagen.
+    if not morphologie.SPRACHE_FEST:
+        morphologie.SPRACHE = "en"
     import messbuch
     messbuch.anmelden(server)
     _schema_entrumpeln()
@@ -2975,7 +3059,10 @@ _ARCHIV_TEXTE = {
                      "Befund, Bezug (which project, why), Belegstaerke (Volltext / Abstract /\n"
                      "unbestaetigt). Reports similar entries AND entries citing the same\n"
                      "source (arXiv number, DOI, link) - extend or supersede those instead of\n"
-                     "adding a duplicate from another project.", {
+                     "adding a duplicate from another project. Search with recall first.\n\n"
+                     "Returns \"Gespeichert archiv#id ...\" plus those similar entries and\n"
+                     "a note when a tag is new or the evidence line is missing.", {
+            "text": "The entry, as the lines described above.",
             "tags": "Topic first (e.g. int8-training), then the project that found it.\n"
                     "        Topics are what other projects search by.",
             "art": "exactly one of: befund (what a paper measured/showed), methode\n"
@@ -3001,7 +3088,11 @@ _ARCHIV_TEXTE = {
                      "finding, relevance (which project, why), evidence (full text /\n"
                      "abstract / unconfirmed). Reports similar entries AND entries citing\n"
                      "the same source (arXiv number, DOI, link) - extend or supersede those\n"
-                     "instead of adding a duplicate from another project.", {
+                     "instead of adding a duplicate from another project. Search with recall\n"
+                     "first.\n\n"
+                     "Returns \"Stored archive#id ...\" plus those similar entries and a\n"
+                     "note when a tag is new or the evidence line is missing.", {
+            "text": "The entry, as the lines described above.",
             "tags": "Topic first (e.g. int8-training), then the project that found it.\n"
                     "        Topics are what other projects search by.",
             "kind": "exactly one of: finding (what a paper measured/showed), method\n"
@@ -3039,6 +3130,9 @@ def _archiv_einrichten() -> None:
     global ARCHIV, DB_PATH, NAME, ARTEN, STUMM, ARTEN_EN, _ART_EIN, LAENGE_HINWEIS
     ARCHIV = True
     DB_PATH = _db_pfad(datei="archive.db", umgebung="ARCHIVE_DB")
+    # Die Sprache beim Import kam aus memory.db; das Archiv hat seine eigene.
+    _sprache_folgen(DB_PATH)
+    _sprache_einrichten()
     NAME = (os.environ.get("ARCHIVE_NAME") or ("archive" if _en() else "archiv")).strip().lower()
     ARTEN, STUMM, LAENGE_HINWEIS = ARTEN_ARCHIV, STUMM_ARCHIV, LAENGE_HINWEIS_ARCHIV
     ARTEN_EN = ARTEN_EN_ARCHIV
@@ -3061,6 +3155,7 @@ def _archiv_einrichten() -> None:
         for feld, neu in felder.items():
             beschreibung = _absatz_ersetzen(beschreibung, feld, neu)
         werkzeug.description = beschreibung
+    _arten_im_schema()
 
 
 def main() -> None:
