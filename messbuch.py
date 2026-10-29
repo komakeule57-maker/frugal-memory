@@ -195,7 +195,7 @@ def _connect() -> sqlite3.Connection:
     """Wie im Gedaechtnis: je Aufruf oeffnen, WAL, Sperrfrist, Fremdschluessel an."""
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH, timeout=ms.SPERRFRIST)
-    conn.execute("PRAGMA journal_mode = WAL")
+    ms._wal_einschalten(conn)
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(_SCHEMA)
     # `begonnen` kam am 2026-10-21 dazu: das wahre Anfangsdatum nachgetragener

@@ -69,6 +69,15 @@ import urllib.request
 # ein falscher Wert faellt NICHT auf - der Faktencheck schweigt dann einfach, so
 # wie er es bei jedem Ausfall tut. Wiederfinden: Adressbereich anpingen und bei
 # den Antwortenden `/v1/models` abfragen. Dauerhaft besser: feste Lease im Router.
+def _umgebung(*namen: str, vorgabe: str = "") -> str:
+    """Erste gesetzte Variable; englischer und deutscher Name gelten beide."""
+    for name in namen:
+        wert = os.environ.get(name, "").strip()
+        if wert:
+            return wert
+    return vorgabe
+
+
 URL = os.environ.get("MEMORY_FC_URL", "").strip().rstrip("/")
 
 # Beide Schreibweisen der Basisadresse annehmen. Die Pfade unten lauten
@@ -87,17 +96,17 @@ if URL.endswith("/v1"):
 # Beispiele: das gemessene Board-Modell
 # "AXERA-TECH/Qwen3-VL-2B-Instruct-GPTQ-Int4-AX630C-P320-CTX448", bei einem
 # Cloud-Anbieter schlicht dessen Modellkennung.
-MODELL = os.environ.get("MEMORY_FC_MODELL", "").strip()
+MODELL = _umgebung("MEMORY_FC_MODEL", "MEMORY_FC_MODELL")
 
 # Nur fuer Anbieter, die einen Schluessel verlangen. Wird als
 # `Authorization: Bearer ...` mitgeschickt und taucht nirgends in einer Ausgabe
 # auf - weder in `zustand()` noch in einer Fehlermeldung, denn Fehler werden hier
 # ohnehin verschluckt statt weitergereicht.
-SCHLUESSEL = os.environ.get("MEMORY_FC_SCHLUESSEL", "").strip()
+SCHLUESSEL = _umgebung("MEMORY_FC_KEY", "MEMORY_FC_SCHLUESSEL")
 # Drei Wege zum selben Schweigen: keine Adresse, kein Modellname (beides der
 # Normalfall - niemand hat das hier eingerichtet) oder ausdruecklich
 # abgeschaltet, ohne die Adresse loeschen zu muessen.
-AUS = bool(os.environ.get("MEMORY_FC_AUS", "").strip()) or not URL or not MODELL
+AUS = bool(_umgebung("MEMORY_FC_OFF", "MEMORY_FC_AUS")) or not URL or not MODELL
 
 # Die Vorprobe kostet gemessen 17 ms. Die Frist ist trotzdem auf 3 s gesetzt:
 # `axllm` bedient nur eine Anfrage zugleich, eine noch laufende Antwort haelt
@@ -293,9 +302,9 @@ def zustand() -> str:
     if not URL:
         return "not set up (MEMORY_FC_URL missing)" if en else "nicht eingerichtet (MEMORY_FC_URL nicht gesetzt)"
     if not MODELL:
-        return "not set up (MEMORY_FC_MODELL missing)" if en else "nicht eingerichtet (MEMORY_FC_MODELL nicht gesetzt)"
+        return "not set up (MEMORY_FC_MODEL missing)" if en else "nicht eingerichtet (MEMORY_FC_MODELL nicht gesetzt)"
     if AUS:
-        return "switched off (MEMORY_FC_AUS)" if en else "abgeschaltet (MEMORY_FC_AUS)"
+        return "switched off (MEMORY_FC_OFF)" if en else "abgeschaltet (MEMORY_FC_AUS)"
     rest = _sperre_bis - time.monotonic()
     if rest > 0:
         return (f"blocked for {rest:.0f}s (last attempt failed)" if en

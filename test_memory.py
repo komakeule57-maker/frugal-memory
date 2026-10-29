@@ -533,6 +533,60 @@ def test_abgelehnter_schemastand_schliesst_die_verbindung():
         raise AssertionError("Verbindung blieb offen")
 
 
+def test_parallele_einrichtung_einer_frischen_datei():
+    """0.3.0: das SDK ruft Werkzeuge parallel in Threads auf. Mehrere Aufrufe
+    auf eine frische Datei richteten sie gleichzeitig ein; in rund jedem
+    vierten Lauf fehlte danach `suche` fuer immer, waehrend `schema` den
+    fertigen Stand meldete - jedes remember scheiterte, auch nach Neustart."""
+    import threading
+    ordner = ms.DB_PATH.parent
+    for runde in range(20):
+        ms.DB_PATH = ordner / f"parallel{runde}.db"
+        start = threading.Barrier(5)
+        antworten, fehler = [], []
+
+        def lauf(fn, *args):
+            start.wait()
+            try:
+                antworten.append(fn(*args))
+            except Exception as e:  # noqa: BLE001 - genau das soll auffallen
+                fehler.append(repr(e))
+
+        faeden = [threading.Thread(target=lauf, args=(ms.recall, "sqlite")) for _ in range(3)]
+        faeden += [threading.Thread(target=lauf, args=(ms.remember, f"Eintrag sqlite {i}", "p", "fallstrick"))
+                   for i in range(2)]
+        for f in faeden:
+            f.start()
+        for f in faeden:
+            f.join()
+        assert not fehler, (runde, fehler)
+        gespeichert = [a for a in antworten if a.startswith("Gespeichert")]
+        assert len(gespeichert) == 2, (runde, antworten)
+        conn = sqlite3.connect(ms.DB_PATH)
+        try:
+            assert ms._schema_fertig(conn), runde
+            assert conn.execute("SELECT count(*) FROM eintrag").fetchone()[0] == 2
+        finally:
+            conn.close()
+        assert "Eintrag sqlite 1" in ms.recall("sqlite")
+
+
+def test_fehlender_index_wird_beim_naechsten_aufruf_neu_gebaut():
+    """Wer von 0.3.0 eine zerschossene Einrichtung geerbt hat (Marken in
+    `schema` richtig, `suche` weg), dem baut der naechste Aufruf den Index neu."""
+    ms.remember("Alte Notiz ueber Kanalsperren", tags="p", art="fallstrick")
+    conn = sqlite3.connect(ms.DB_PATH)
+    for name in ("eintrag_ai", "eintrag_ad", "eintrag_au"):
+        conn.execute(f"DROP TRIGGER {name}")
+    conn.execute("DROP TABLE suche_vocab")
+    conn.execute("DROP TABLE suche")
+    conn.commit()
+    conn.close()
+    assert ms.remember("Neue Notiz ueber Kanalsperren", tags="p", art="fallstrick").startswith("Gespeichert")
+    antwort = ms.recall("Kanalsperren")
+    assert "Alte Notiz" in antwort and "Neue Notiz" in antwort, antwort
+
+
 def test_die_privaten_teile_des_sdk_sind_da():
     """Kanarienvogel: Gast, Englisch, Archiv und Messbuch tauschen Werkzeuge
     und Anweisung ueber zwei private Teile des SDK. Benennt ein Update sie um,
@@ -832,8 +886,11 @@ def test_verdichten_deckelt_die_seltenheit():
     der feste Deckel liegt darunter. Dann wird das Paar gar nicht verglichen."""
     for i in range(60):
         ms.remember(f"Fuellnotiz nummer {i} mit Wort{i}x", tags="proj", art="verlauf")
-    for _ in range(3):
-        ms.remember("Dampfkessel Glysantin Frostschutz Keller", tags="proj", art="fallstrick")
+    # Je ein eigenes Wort, damit die Stammmengen verschieden sind - gleiche
+    # sind seit 0.3.1 immer Kandidaten (test_verdichten_findet_massendubletten).
+    for k in range(3):
+        ms.remember(f"Dampfkessel Glysantin Frostschutz Keller Kesselhaus Variante{k}q",
+                    tags="proj", art="fallstrick")
     assert "1 Gruppe(n)" in ms.verdichten(), ms.verdichten()
     alt = ms.DECKEL_SELTEN
     ms.DECKEL_SELTEN = 2
@@ -842,6 +899,89 @@ def test_verdichten_deckelt_die_seltenheit():
     finally:
         ms.DECKEL_SELTEN = alt
     assert "nichts ueber" in aus, aus
+
+
+def test_verdichten_findet_massendubletten():
+    """Bis 0.3.0 zaehlten nur seltene Staemme: ab 26 gleichen Kopien (bei 100
+    Eintraegen schon ab 6) war jeder Stamm zu haeufig, und verdichten meldete
+    "nichts ueber 50 %" - gerade beim Agenten, der in einer Schleife speichert."""
+    for i in range(70):
+        ms.remember(f"Fuellnotiz nummer {i} mit Wort{i}x", tags="proj", art="verlauf")
+    for _ in range(30):
+        ms.remember("Der Build braucht Node 20, nicht 18", tags="proj", art="fallstrick")
+    aus = ms.verdichten()
+    assert "Gruppe (30 Eintraege" in aus, aus
+
+
+def test_gewichte_bleiben_unter_der_platzhaltergrenze():
+    """verdichten fragt alle Staemme des Bestands auf einmal ab; mit der
+    Grenze eines SQLite-Baus (oft 32.766, frueher 999) kam ein roher Fehler."""
+    ms.remember("Ein Eintrag, damit der Index steht", tags="proj", art="verlauf")
+    conn = ms._connect()
+    try:
+        conn.setlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, 999)   # alte Vorgabe
+        gew = ms._gewichte(conn, {f"stamm{i}" for i in range(2000)} | {"eintrag"})
+        assert len(gew) == 2001
+    finally:
+        conn.close()
+
+
+def test_themen_ohne_marken():
+    """max() ueber eine leere Folge: wer ohne tags= speicherte, bekam bei
+    themen() einen ValueError statt einer Antwort."""
+    ms.remember("Ein Eintrag ganz ohne Marke", tags="", art="verlauf")
+    aus = ms.themen()
+    assert "keiner traegt eine Marke" in aus, aus
+
+
+def test_zeige_liest_bereiche():
+    """Der Kettenvermerk schreibt "#872-#875"; zeige holte davon nur die Enden."""
+    for i in range(1, 6):
+        ms.remember(f"Eintrag Nummer {i} fuer den Bereich", tags="proj", art="verlauf")
+    aus = ms.zeige("#2-#4")
+    assert all(f"#{i} [" in aus for i in (2, 3, 4)) and "#5 [" not in aus, aus
+    assert ms._ids("1, 3-5") == [1, 3, 4, 5]
+    assert "nichts getan" in ms.zeige("1-500")
+
+
+def test_ersetzt_mit_unbekannter_nummer_speichert_nicht():
+    """Bis 0.3.0 wurde eine falsche Nummer still uebergangen: der Agent hielt
+    die Abloesung fuer erledigt, und der alte Eintrag stand weiter daneben."""
+    ms.remember("Der Port ist 5433", tags="db", art="schnittstelle")
+    aus = ms.remember("Der Port ist 5434", tags="db", art="schnittstelle", ersetzt="99")
+    assert "nichts gespeichert" in aus and "#99" in aus, aus
+    conn = ms._connect()
+    assert conn.execute("SELECT count(*) FROM eintrag").fetchone()[0] == 1
+    conn.close()
+    assert "Als veraltet markiert: #1" in ms.remember("Der Port ist 5434", tags="db",
+                                                     art="schnittstelle", ersetzt="1")
+
+
+def test_veraltet_vermerk_ohne_doppelten_grund():
+    """"[VERALTET: ersetzt, ersetzt durch #2]" - und im Englischen
+    "[SUPERSEDED: ersetzt, replaced by #2]", weil der Grund deutsch gespeichert war."""
+    assert ms._veraltet_vermerk("ersetzt", 2) == " [VERALTET, ersetzt durch #2]"
+    assert ms._veraltet_vermerk("superseded", None) == " [VERALTET]"
+    assert ms._veraltet_vermerk("Modell gewechselt", None) == " [VERALTET: Modell gewechselt]"
+
+
+def test_zeige_scheitert_nicht_an_der_rueckkopplung():
+    """Die Rueckkopplung schreibt beim zeige. Hielt ein anderer Prozess die
+    Schreibsperre laenger als die Sperrfrist, scheiterte bis 0.3.0 das ganze zeige."""
+    ms.remember("Kanalsperren am Wehr brauchen Wartung", tags="proj", art="verlauf")
+    ms.recall("Kanalsperren Wehr")
+    sperre = sqlite3.connect(ms.DB_PATH)
+    sperre.execute("BEGIN IMMEDIATE")
+    alt = ms.SPERRFRIST
+    ms.SPERRFRIST = 0.2
+    try:
+        with contextlib.redirect_stderr(io.StringIO()):
+            aus = ms.zeige("1")
+    finally:
+        ms.SPERRFRIST = alt
+        sperre.rollback()
+        sperre.close()
+    assert "Kanalsperren am Wehr" in aus, aus
 
 
 def test_remember_zeigt_die_dublette():
@@ -1105,6 +1245,64 @@ def test_import_rechnet_wie_remember():
     finally:
         conn.rollback()
         conn.close()
+
+
+def test_nachziehen_bindet_neue_eintraege_nicht_zu_ketten():
+    """Bis 0.3.0 erkannte nachziehen.py Ketten ueber den ganzen Bestand neu -
+    drei unabhaengige Notizen mit derselben Marke, deren zweite klein und
+    deren dritte mit "Why" anfing, wurden zum "zerschnittenen Memo", und
+    recall zeigte danach nur noch eine davon. Ketten entstehen nur beim Import."""
+    ms.remember("The parser keeps the raw token list for error messages.",
+                tags="parser", art="entscheidung")
+    ms.remember("pytest in the parser folder needs the fixtures from conftest.py.",
+                tags="parser", art="fallstrick")
+    ms.remember("Why the parser is hand-written: the grammar has two lookaheads.",
+                tags="parser", art="entscheidung")
+    vorher = ms.recall("parser", limit=8)
+    alt = sys.argv
+    sys.argv = ["nachziehen.py"]
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            assert nachziehen.main() == 0
+    finally:
+        sys.argv = alt
+    conn = ms._connect()
+    glieder = conn.execute("SELECT count(*) FROM eintrag WHERE kopf IS NOT NULL").fetchone()[0]
+    conn.close()
+    assert glieder == 0, f"{glieder} Kettenglieder aus neuen Eintraegen"
+    assert ms.recall("parser", limit=8) == vorher
+
+
+def test_import_bindet_nur_eigene_stuecke_und_laesst_alte_ketten_stehen():
+    """Der Import beurteilt nur, was er gerade eingelesen hat: eine schon
+    vermerkte Kette bleibt, und neue Notizen davor werden nicht hineingezogen."""
+    ms.remember("Ein abgebrochener Satz ohne Ende ueber den Hafen", tags="hafen", art="verlauf")
+    ms.remember("und seine Fortsetzung mit Kleinbuchstaben am Anfang", tags="hafen", art="verlauf")
+    conn = ms._connect()
+    assert ms._ketten_nachtragen(conn, [1, 2]) == 2
+    conn.commit()
+    conn.close()
+    ms.remember("Eine neue Notiz ueber die Gaertnerei ohne Punkt am Ende", tags="gaertnerei",
+                art="verlauf")
+    ordner = ms.DB_PATH.parent / "memos3"
+    ordner.mkdir()
+    (ordner / "gaertnerei.md").write_text(
+        "---\nmodified: 2026-01-02\n---\n\n"
+        "und das hier faengt klein an, gehoert aber nicht zur Notiz davor\n\n"
+        "Die Gärtnerei liefert die Pflanzkübel erst nach dem Frost, also Mitte März\n\n"
+        "und nicht vorher, weil die Übergabe sonst über den Hof laufen muesste.\n"
+    )
+    alt = sys.argv
+    sys.argv = ["import_memos.py", str(ordner)]
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            assert im.main() == 0
+    finally:
+        sys.argv = alt
+    conn = ms._connect()
+    ketten = conn.execute("SELECT id, kopf, nr FROM eintrag WHERE kopf IS NOT NULL ORDER BY id").fetchall()
+    conn.close()
+    assert ketten == [(1, 1, 1), (2, 1, 2), (5, 5, 1), (6, 5, 2)], ketten
 
 
 def test_import_ohne_argument_nennt_die_vorhandenen_ordner():
@@ -1674,7 +1872,7 @@ def test_en_werkzeuge_sprechen_englisch_und_finden_gebeugt():
                           kind="fallstrick")  # deutscher Name geht weiterhin
         assert "as pitfall" in aus, aus
         treffer = en.recall("invalidating caches")
-        assert "hits for" in treffer and "[pitfall]" in treffer, treffer
+        assert ("hits for" in treffer or "1 hit for" in treffer) and "[pitfall]" in treffer, treffer
         assert "invalidated" in treffer and 'show("' in treffer, treffer
         assert "(+ stem matches)" in treffer, treffer
         assert "Unknown kind: gibberish" in en.recall("cache", kind="gibberish")
@@ -1773,6 +1971,85 @@ def test_db_pfad_arbeitskopie_paket_und_vorgabe():
             os.environ.pop(k, None)
             if v is not None:
                 os.environ[k] = v
+
+
+# ---------------------------------------------------------------------------
+# Schalter der Befehle
+# ---------------------------------------------------------------------------
+def _start(*schalter):
+    """Ruft memory_server.main() in einem eigenen Prozess; server.run tut nichts."""
+    import subprocess
+    ordner = tempfile.mkdtemp(prefix="schaltertest-")
+    probe = ("import sys, json, memory_server as ms; ms.server.run = lambda **k: None; "
+             f"sys.argv = ['frugal-memory', *{list(schalter)!r}]; ms.main(); "
+             "print(json.dumps(sorted(t.name for t in ms.server._tool_manager.list_tools())))")
+    lauf = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True,
+                          env={**os.environ, "MEMORY_FC_AUS": "1", "MEMORY_DB": f"{ordner}/m.db",
+                               "ARCHIVE_DB": f"{ordner}/a.db", "MESSBUCH_DB": f"{ordner}/mb.db"},
+                          cwd=Path(__file__).resolve().parent)
+    return lauf, Path(ordner)
+
+
+def test_guest_ist_nur_lesend_wie_gast():
+    """Bis 0.3.0 galt nur `--gast`; `--guest` wurde uebergangen und startete
+    still einen Server MIT remember und vergessen."""
+    erwartet = None
+    for schalter in ("--gast", "--guest"):
+        lauf, _ = _start(schalter)
+        assert lauf.returncode == 0, lauf.stderr
+        werkzeuge = json.loads(lauf.stdout.splitlines()[-1])
+        assert "remember" not in werkzeuge and "vergessen" not in werkzeuge, (schalter, werkzeuge)
+        erwartet = erwartet or werkzeuge
+        assert werkzeuge == erwartet, (schalter, werkzeuge, erwartet)
+
+
+def test_unbekannter_schalter_startet_nicht():
+    """Ein Tippfehler startet keinen Server mit anderen Rechten als gewollt."""
+    for schalter in (["--gest"], ["--guest", "--readonly"], ["--messbuch", "--guest"]):
+        lauf, ordner = _start(*schalter)
+        assert lauf.returncode == 2, (schalter, lauf.returncode, lauf.stdout)
+        assert "not started" in lauf.stderr and "usage: frugal-memory" in lauf.stderr, lauf.stderr
+        assert not list(ordner.iterdir()), "trotzdem eine Datei angelegt"
+
+
+def test_hilfe_und_version_oeffnen_keine_datei():
+    for schalter, erwartet in (("--help", "usage: frugal-memory"), ("--version", ms.__version__)):
+        lauf, ordner = _start(schalter)
+        assert lauf.returncode == 0 and erwartet in lauf.stdout, (schalter, lauf.stdout, lauf.stderr)
+        assert not list(ordner.iterdir()), (schalter, list(ordner.iterdir()))
+
+
+def test_import_dry_run_speichert_nichts():
+    """Bis 0.3.0 galt nur `--trocken`; `--dry-run` importierte wirklich."""
+    ordner = ms.DB_PATH.parent / "memos-dry"
+    ordner.mkdir()
+    (ordner / "beispiel.md").write_text(
+        "---\nmodified: 2026-01-02\n---\n\n"
+        "Ein Absatz, lang genug fuer die Mindestzeichenzahl von vierzig Zeichen.\n")
+    alt = sys.argv
+    try:
+        for schalter, rc in (("--dry-run", 0), ("--trocken", 0), ("--dryrun", 2)):
+            sys.argv = ["import_memos.py", str(ordner), schalter]
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                assert im.main() == rc, schalter
+            conn = ms._connect()
+            assert conn.execute("SELECT count(*) FROM eintrag").fetchone()[0] == 0, schalter
+            conn.close()
+    finally:
+        sys.argv = alt
+
+
+def test_nachziehen_hilfe_und_tippfehler_schreiben_nichts():
+    """`nachziehen --help` legte bis 0.3.0 die Datei an und meldete "Geschrieben."."""
+    alt = sys.argv
+    try:
+        for schalter, rc in (("--help", 0), ("--prob", 2)):
+            sys.argv = ["nachziehen.py", schalter]
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                assert nachziehen.main() == rc, schalter
+            assert not ms.DB_PATH.exists(), schalter
+    finally:
+        sys.argv = alt
 
 
 # ---------------------------------------------------------------------------

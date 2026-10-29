@@ -115,18 +115,23 @@ def consolidate(tag: str = "", kind: str = "all", threshold: float = 0.5,
                 groups: int = 5) -> str:
     """Finds groups of entries that say largely the same thing.
 
-    Use it for tidying up. Read-only: merging is a judgment call - replace a
-    group by one new entry via remember(..., supersedes="...").
+    Use it for tidying up. Read-only, changes nothing: merging is a judgment
+    call - replace a group by one new entry via remember(..., supersedes="...").
+    Compares shared word stems weighted by rarity, not meaning; identical
+    copies are always found. A few seconds for thousands of entries.
 
-    Returns the groups found, with their entries (id, kind, date, title) and
-    how similar they are.
+    Returns how many entries and pairs were compared, then the groups, largest
+    first, each with its best similarity and its entries (id, kind, date,
+    title) - or that nothing reached the threshold.
 
     Args:
         tag: Only consider entries from this project (empty = all). Sub-tags
             are included, as in recall.
-        kind: Only consider entries of this kind/these kinds. Default "all".
-        threshold: Similarity above which two entries count as the same.
-        groups: Maximum number of groups reported.
+        kind: Only consider entries of this kind/these kinds, comma-separated.
+            Default "all"; "history" alone is the most rewarding case.
+        threshold: Share of the weighted stems two entries must have in
+            common, 0 to 1. Default 0.5; 0.8 shows only near-copies.
+        groups: Maximum number of groups reported (default 5).
     """
     return ms.verdichten(marke=tag, art=kind, schwelle=threshold, gruppen=groups)
 
@@ -143,8 +148,8 @@ def check(ids: str) -> str:
     comes back the same both times is reported, otherwise "disputed". At most
     5 pairs per call, roughly 10 seconds each.
 
-    Opt-in: needs MEMORY_FC_URL and MEMORY_FC_MODELL (any OpenAI-compatible
-    endpoint; MEMORY_FC_SCHLUESSEL if it wants a key). Without them this tool
+    Opt-in: needs MEMORY_FC_URL and MEMORY_FC_MODEL (any OpenAI-compatible
+    endpoint; MEMORY_FC_KEY if it wants a key). Without them this tool
     does nothing and says so. When set up, up to 200 characters of each note
     are sent there.
 
@@ -175,12 +180,15 @@ def classify(ids: str, kind: str) -> str:
     """Sets the kind of knowledge for existing entries.
 
     Use it in passing on entries recall shows as "unsorted"; the backlog need
-    not be sorted in one sitting. Changes only the kind.
+    not be sorted in one sitting. Writes only the kind - text, tags, ids and
+    superseded status stay as they are - and is undone by classifying again.
 
-    Returns the ids changed, unknown ids and how many are still unsorted.
+    Returns the ids changed, names unknown ids, and how many live entries are
+    still unsorted.
 
     Args:
-        ids: One or more entry ids, e.g. "376,481".
+        ids: One or more entry ids, e.g. "376,481"; a range "376-380" means
+            every id in between.
         kind: Exactly one of: interface, pitfall, decision, measurement,
             workflow, history. "unsorted" undoes the classification.
     """

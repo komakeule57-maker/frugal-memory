@@ -10,6 +10,7 @@ import re
 import socket
 import sqlite3
 import sys
+import time
 import traceback
 from pathlib import Path
 
@@ -317,7 +318,17 @@ def _urteil_aus(urteil):
     return _URTEILE_EN.get(urteil, urteil) if (_en() and urteil) else urteil
 
 
+# Die Gruende, die das Werkzeug selbst einsetzt - in der Sprache, in der der
+# Vermerk geschrieben wurde. Angezeigt werden sie in der des Servers, sonst
+# stand "[SUPERSEDED: ersetzt, replaced by #9]" oder "[VERALTET: veraltet]" da.
+_VORGABE_GRUENDE = {"ersetzt", "veraltet", "superseded"}
+
+
 def _veraltet_vermerk(grund: str, durch) -> str:
+    if (grund or "").strip().lower() in _VORGABE_GRUENDE:
+        if durch:
+            return _t(" [VERALTET, ersetzt durch #{durch}]", durch=durch)
+        return _t(" [VERALTET]")
     return (_t(" [VERALTET: {grund}", grund=grund)
             + (_t(", ersetzt durch #{durch}", durch=durch) if durch else "") + "]")
 
@@ -328,7 +339,7 @@ _TRENNER = re.compile(r"[\s,]+")
 
 # Die einzige Stelle mit der Versionsnummer: pyproject.toml liest sie von hier,
 # und der Server meldet sie jedem Client beim Verbinden (serverInfo).
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 # Die Arbeitsregeln in Kurzform. Claude Code legt sie jeder Sitzung bei, in
 # der der Server eingebunden ist - auch dort, wo nur `uvx frugal-memory`
@@ -450,7 +461,7 @@ def _connect() -> sqlite3.Connection:
         return _connect_lesend()
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)   # erster Start nach pip install
     conn = sqlite3.connect(DB_PATH, timeout=SPERRFRIST)
-    conn.execute("PRAGMA journal_mode = WAL")
+    _wal_einschalten(conn)
     # Gilt JE VERBINDUNG und ist in SQLite per Vorgabe aus - ohne diese Zeile
     # steht der Fremdschluessel im Schema und tut nichts.
     conn.execute("PRAGMA foreign_keys = ON")
@@ -460,6 +471,27 @@ def _connect() -> sqlite3.Connection:
         conn.close()   # sonst bleibt sie offen, wenn der Schemastand abgelehnt wird
         raise
     return conn
+
+
+def _wal_einschalten(conn: sqlite3.Connection) -> None:
+    """Schaltet die Datei auf WAL, sofern sie es nicht schon ist.
+
+    Der Umschalter braucht die Datei fuer sich allein, und SQLite fragt dabei
+    die Sperrfrist nicht ab: auf einer FRISCHEN Datei, die ein paralleler
+    Aufruf gerade einrichtet, kam sofort "database is locked". Ist die Datei
+    einmal WAL, bleibt sie es - dann genuegt die Leseabfrage. Bis dahin wird
+    innerhalb der Sperrfrist erneut versucht.
+    """
+    frist = time.monotonic() + SPERRFRIST
+    while True:
+        try:
+            if conn.execute("PRAGMA journal_mode").fetchone()[0].lower() != "wal":
+                conn.execute("PRAGMA journal_mode = WAL")
+            return
+        except sqlite3.OperationalError as fehler:
+            if "locked" not in str(fehler) or time.monotonic() > frist:
+                raise
+            time.sleep(0.02)
 
 
 def _connect_lesend() -> sqlite3.Connection:
@@ -498,6 +530,9 @@ _NUMMER = re.compile(r"(?:([A-Za-z][\w.-]*)#|#)?(\d+)")
 # Eine Nummer in einer Ausgabe: `#72`, aber nicht `&#72;`, nicht `a#72` und
 # nicht die schon benannte. Hoechstens fuenf Ziffern, damit eine Farbe wie
 # `#202020` keine Nummer wird; ebenso der Verweis `[[72]]`.
+# Zwischen zwei Nummern: macht daraus einen Bereich ("872-875", "#3 bis #7").
+_BIS = re.compile(r"\s*(?:-|–|\.\.|bis|to)\s*")
+_BEREICH_HOECHSTENS = 100
 _NUMMER_AUS = re.compile(r"(?<![\w#&/])#(\d{1,5})\b")
 _VERWEIS_AUS = re.compile(r"\[\[(\d{1,5})\]\]")
 
@@ -510,7 +545,10 @@ def _ids(text: str) -> list:
     Name schuetzt nur, wenn ihn auch das Gedaechtnis prueft, dem er nicht gilt.
     """
     aus = []
-    for name, zahl in _NUMMER.findall(text or ""):
+    text = text or ""
+    vorige = None
+    for treffer in _NUMMER.finditer(text):
+        name, zahl = treffer.groups()
         if name and name.lower() != NAME:
             raise ValueError(_t(
                 "{fremd}#{zahl} gehoert zum Gedaechtnis '{fremd}', dieses hier heisst "
@@ -518,7 +556,18 @@ def _ids(text: str) -> list:
                 "nichts getan.", fremd=name, zahl=zahl, name=NAME))
         if int(zahl) > _GROESSTE_ID:
             raise ValueError(_t("#{zahl} ist keine gueltige Nummer.", zahl=zahl))
+        # Ein Bereich ("#872-#875", so schreibt ihn der Kettenvermerk) meint
+        # alle Nummern dazwischen. Bis 0.3.0 kamen nur die beiden Enden an.
+        if vorige is not None and _BIS.fullmatch(text[vorige.end():treffer.start()]):
+            von, bis = aus[-1], int(zahl)
+            if bis - von > _BEREICH_HOECHSTENS:
+                raise ValueError(_t(
+                    "Der Bereich #{von}-#{bis} umfasst mehr als {n} Nummern - "
+                    "nichts getan. Kleiner fassen oder einzeln nennen.",
+                    von=von, bis=bis, n=_BEREICH_HOECHSTENS))
+            aus.extend(range(von + 1, bis))
         aus.append(int(zahl))
+        vorige = treffer
     return aus
 
 
@@ -573,6 +622,37 @@ def _gibt_es(conn: sqlite3.Connection, name: str) -> bool:
     ).fetchone())
 
 
+# Was eine fertig eingerichtete Datei hat. Fehlt eines davon, laeuft die
+# Einrichtung - sonst bleibt es bei Leseabfragen.
+_FERTIGE_TABELLEN = {"schema", "eintrag", "suche", "suche_vocab", "veraltet",
+                     "veraltet_aufgehoben", "marken", "vokabel", "art_vokabular",
+                     "nachfrage"}
+_FERTIGE_TRIGGER = {"eintrag_ai", "eintrag_ad", "eintrag_au"}
+
+
+def _schema_fertig(conn: sqlite3.Connection) -> bool:
+    """Steht die Datei schon auf dem heutigen Stand? Nur lesend.
+
+    Prueft die Tabellen selbst, nicht nur die Marken in `schema`: genau diese
+    Marken standen nach einer zerschossenen Einrichtung richtig da, waehrend
+    `suche` fehlte.
+    """
+    namen = {}
+    for typ, name in conn.execute("SELECT type, name FROM sqlite_master"):
+        namen.setdefault(typ, set()).add(name)
+    tabellen = namen.get("table", set())
+    if not _FERTIGE_TABELLEN <= tabellen or "mem" in tabellen:
+        return False
+    if not _FERTIGE_TRIGGER <= namen.get("trigger", set()):
+        return False
+    werte = dict(conn.execute("SELECT schluessel, wert FROM schema"))
+    if (werte.get("stand") != str(SCHEMA_STAND) or "sprache" not in werte
+            or werte.get("einheit") != _einheit_name()):
+        return False
+    da = {z[0] for z in conn.execute("SELECT art FROM art_vokabular")}
+    return da >= {*ARTEN, UNSORTIERT}
+
+
 def _schema_sicherstellen(conn: sqlite3.Connection) -> None:
     """Legt an, was fehlt, und zieht einen Altbestand auf den heutigen Stand.
 
@@ -581,7 +661,30 @@ def _schema_sicherstellen(conn: sqlite3.Connection) -> None:
     dem vier Fallen zugleich folgten (#1453): es gibt wieder ALTER, echte
     Fremdschluessel, ein aenderbares Vokabular und Filter, die ein
     gewoehnliches WHERE sind statt eines Kunstgriffs.
+
+    Die Einrichtung laeuft als EINE Transaktion unter `BEGIN IMMEDIATE`. Das
+    SDK fuehrt Werkzeugaufrufe parallel in Threads aus; vorher richteten
+    mehrere Aufrufe auf eine frische Datei sie gleichzeitig ein, und in rund
+    jedem vierten Lauf fehlte danach `suche` fuer immer, waehrend `schema`
+    den fertigen Stand meldete. Jetzt wartet der zweite auf den ersten und
+    prueft danach erneut. Im Normalfall bleibt es bei Leseabfragen
+    (`_schema_fertig`) - eine Schreibsperre je Werkzeugaufruf wuerde jeden
+    Leser hinter einem laufenden Schreiber anstellen.
     """
+    if _schema_fertig(conn):
+        _sprache_pruefen(conn)
+        return
+    if conn.in_transaction:
+        conn.commit()
+    conn.execute("BEGIN IMMEDIATE")
+    _schema_einrichten(conn)
+    # nachziehen.py schreibt die Sprachmarke erst mit seinem eigenen Commit fest.
+    if not SPRACHE_UMSTELLEN and conn.in_transaction:
+        conn.commit()
+
+
+def _schema_einrichten(conn: sqlite3.Connection) -> None:
+    """Der eigentliche Umbau; laeuft in der Transaktion von `_schema_sicherstellen`."""
     stand = _stand(conn)
     # Ein aelterer Server auf einer neueren Datei setzte den Stand still
     # zurueck (unten) - die naechste Sitzung mit neuem Code haette dann einen
@@ -607,16 +710,14 @@ def _schema_sicherstellen(conn: sqlite3.Connection) -> None:
         else:
             _speicher_anlegen(conn)
     einheit = conn.execute("SELECT wert FROM schema WHERE schluessel = 'einheit'").fetchone()
-    if einheit is None or einheit[0] != _einheit_name():
+    if einheit is None or einheit[0] != _einheit_name() or not _gibt_es(conn, "suche"):
         _index_umbauen(conn)
-        conn.commit()
     # Nur schreiben, wenn sich etwas geaendert hat. Die Versionsnummer bei
     # jeder Verbindung neu zu setzen ist ein INSERT OR REPLACE je
     # Werkzeugaufruf - unter WAL ein fsync, und der schlaegt mit rund 5,5 ms
     # auf JEDEN Aufruf durch, gleich ob er sonst 0,7 oder 8 ms braucht.
     if stand != SCHEMA_STAND:
         _stand_setzen(conn, SCHEMA_STAND)
-        conn.commit()
     _sprache_pruefen(conn)
 
 
@@ -698,7 +799,6 @@ def _schattenbestand_bergen(conn: sqlite3.Connection) -> int:
     conn.execute("DROP TABLE mem")
     conn.execute("DROP TABLE IF EXISTS art")
     conn.execute("DROP TABLE IF EXISTS kette")
-    conn.commit()
     if zeilen:
         sys.stderr.write(
             f"mcp-memory: {len(zeilen)} Eintraege aus einem Schattenbestand geborgen "
@@ -763,6 +863,23 @@ def _nebentabellen(conn: sqlite3.Connection) -> None:
         conn.executemany("INSERT INTO art_vokabular (art) VALUES (?)", fehlt)
 
 
+def _skript(conn: sqlite3.Connection, sql: str) -> None:
+    """Wie `executescript`, aber in der laufenden Transaktion.
+
+    `executescript` schreibt eine offene Transaktion vorher fest und laesst
+    jede Anweisung einzeln laufen - die Einrichtung waere damit wieder in
+    Stuecke zerlegt, zwischen die ein paralleler Aufruf greifen kann.
+    """
+    stueck = ""
+    for zeile in sql.splitlines(keepends=True):
+        stueck += zeile
+        if sqlite3.complete_statement(stueck):
+            conn.execute(stueck)
+            stueck = ""
+    if stueck.strip():
+        raise ValueError(f"unvollstaendige Anweisung: {stueck.strip()[:60]}")
+
+
 def _speicher_anlegen(conn: sqlite3.Connection) -> None:
     """`eintrag` als Speicher, `suche` als Index darueber, Trigger dazwischen.
 
@@ -771,7 +888,7 @@ def _speicher_anlegen(conn: sqlite3.Connection) -> None:
     erst darin: dass das Datum kein Suchwort ist, war bis Stand 4 eine
     Verabredung (`UNINDEXED`) und ist jetzt Bauart (#1425).
     """
-    conn.executescript(f"""
+    _skript(conn, f"""
         CREATE TABLE eintrag (
           id      INTEGER PRIMARY KEY,
           content TEXT NOT NULL,
@@ -802,7 +919,7 @@ def _index_anlegen(conn: sqlite3.Connection) -> None:
     Spalten in `eintrag` genauso heissen, liest External Content beim
     `rebuild` und beim `integrity-check` dasselbe, was die Trigger einfuegen.
     """
-    conn.executescript("""
+    _skript(conn, """
         CREATE VIRTUAL TABLE suche USING fts5(
             ncontent, ntags, stems, teile,
             content='eintrag', content_rowid='id');
@@ -955,8 +1072,15 @@ def _setzt_abschnitt_fort(text: str) -> bool:
     return bool(_ABSCHNITT_FORT.match(text.lstrip()))
 
 
-def _ketten_nachtragen(conn: sqlite3.Connection) -> int:
+def _ketten_nachtragen(conn: sqlite3.Connection, ids=None) -> int:
     """Findet zerschnittene Memos und traegt ihre Glieder in `kette` ein.
+
+    Mit `ids` (so ruft der Import) nur unter diesen Eintraegen, und die
+    vorhandenen Ketten bleiben stehen. Ohne `ids` wird der ganze Bestand neu
+    beurteilt - das ist nur fuer einen Bestand richtig, der ganz aus einem
+    Import stammt. Bis 0.3.0 tat nachziehen.py genau das bei jedem Lauf und
+    band dabei auch neue, unabhaengige Eintraege zusammen, die zufaellig klein
+    oder mit "Why ..." anfingen; recall zeigte danach nur noch einen davon.
 
     Zwei Sicherungen gegen Fehlalarm: die Stuecke muessen dicht beieinander
     liegen (der Import schrieb sie hintereinander) und dieselbe erste Marke
@@ -970,6 +1094,9 @@ def _ketten_nachtragen(conn: sqlite3.Connection) -> int:
     Deshalb wird aus einer 240 Eintraege langen Projektdatei keine 240er Kette.
     """
     zeilen = conn.execute("SELECT id, content, tags FROM eintrag ORDER BY id").fetchall()
+    if ids is not None:
+        gewollt = set(ids)
+        zeilen = [z for z in zeilen if z[0] in gewollt]
     schnitt = {}
     for (a, ca, ta), (b, cb, tb) in zip(zeilen, zeilen[1:]):
         if b - a > 3:
@@ -995,7 +1122,8 @@ def _ketten_nachtragen(conn: sqlite3.Connection) -> int:
             if glied not in schnitt:
                 break
             glied, nr = schnitt[glied], nr + 1
-    conn.execute("UPDATE eintrag SET kopf = NULL, nr = NULL WHERE kopf IS NOT NULL")
+    if ids is None:
+        conn.execute("UPDATE eintrag SET kopf = NULL, nr = NULL WHERE kopf IS NOT NULL")
     conn.executemany("UPDATE eintrag SET kopf = ?, nr = ? WHERE id = ?",
                      [(kopf, nr, glied) for glied, kopf, nr in glieder])
     conn.commit()
@@ -1367,19 +1495,24 @@ def _staemme(text: str) -> set:
     return {stem(w) for w in _WORT.findall(_einheitlich(text)) if len(w) > 2}
 
 
+_HAEPPCHEN = 900   # Platzhalter je Abfrage, unter der alten Grenze von 999
+
+
 def _gewichte(conn, staemme: set) -> dict:
     """Seltenheit je Stamm aus dem Index selbst. Ein Stamm, der in fast jedem
     Eintrag vorkommt, sagt nichts ueber Aehnlichkeit aus."""
     if not staemme:
         return {}
     gesamt = conn.execute("SELECT count(*) FROM eintrag").fetchone()[0] or 1
-    platz = ",".join("?" * len(staemme))
-    haeufig = dict(
-        conn.execute(
-            f"SELECT term, doc FROM suche_vocab WHERE col='stems' AND term IN ({platz})",
-            tuple(staemme),
-        )
-    )
+    # In Haeppchen: verdichten fragt alle Staemme des Bestands auf einmal ab,
+    # und die Zahl der Platzhalter ist je SQLite-Bau begrenzt (oft 32.766,
+    # in alten Fassungen 999). Bis 0.3.0 kam dort ein roher Fehler.
+    liste, haeufig = list(staemme), {}
+    for anfang in range(0, len(liste), _HAEPPCHEN):
+        teil = liste[anfang:anfang + _HAEPPCHEN]
+        haeufig.update(conn.execute(
+            "SELECT term, doc FROM suche_vocab WHERE col='stems' AND term IN "
+            f"({','.join('?' * len(teil))})", teil))
     return {s: math.log(1 + gesamt / (1 + haeufig.get(s, 0))) for s in staemme}
 
 
@@ -1566,6 +1699,15 @@ def remember(text: str, tags: str = "", art: str = "", ersetzt: str = "") -> str
         # Alles in EINER Transaktion, und alles Fehlbare gefangen: frueher lief
         # der mem-INSERT vor dem art-INSERT, und scheiterte der zweite, bekam
         # der Nutzer einen rohen Traceback - der Text war weg (#1426).
+        # Eine falsche Nummer in `ersetzt=` wurde bis 0.3.0 still uebergangen:
+        # der Agent hielt die Abloesung fuer erledigt, und der alte Eintrag
+        # stand weiter neben dem neuen - das Gegenteil des Zwecks.
+        fehlt = [i for i in _ids(ersetzt)
+                 if not conn.execute("SELECT 1 FROM eintrag WHERE id = ?", (i,)).fetchone()]
+        if fehlt:
+            return _t("Fehler: ersetzt= nennt {ids}, die es nicht gibt - nichts gespeichert. "
+                      "Nummer pruefen oder ersetzt= weglassen.",
+                      ids=", ".join("#" + str(i) for i in fehlt))
         try:
             markenhinweise = _markenpruefung(conn, tags)
             stems, teile = _ableitungen(conn, text, tags)
@@ -1868,23 +2010,26 @@ def _dubletten(conn, text: str, ausser: int, schwelle: float = 0.55) -> list:
 def verdichten(marke: str = "", art: str = "alle", schwelle: float = 0.5, gruppen: int = 5) -> str:
     """Finds groups of entries that say largely the same thing.
 
-    Use it for tidying up. Read-only: merging is a judgment call - replace a
-    group by one new entry via remember(..., ersetzt="...").
+    Use it for tidying up. Read-only, changes nothing: merging is a judgment
+    call - replace a group by one new entry via remember(..., ersetzt="...").
+    Compares shared word stems weighted by rarity, not meaning; identical
+    copies are always found. A few seconds for thousands of entries.
 
-    Returns the groups found, with their entries (id, kind, date, title) and
-    how similar they are.
+    Returns how many entries and pairs were compared, then the groups, largest
+    first, each with its best similarity and its entries (id, kind, date,
+    title) - or that nothing reached the threshold.
 
     Args:
         marke: Only consider entries from this project (empty = all). Same
             reading as recall and themen: the tag is searched as a phrase in
             the tag field, so multi-tagged entries and sub-tags are included
             ("spiel3d-test" also matches "spiel3d-test Nachtfrost").
-        art: Only consider entries of this kind/these kinds. Default "alle"
-            (all) - for consolidation the chronicle is the most worthwhile
-            case; art="verlauf" tackles it on its own.
-        schwelle: The similarity threshold above which two entries count as
-            the same.
-        gruppen: Maximum number of groups reported.
+        art: Only consider entries of this kind/these kinds, comma-separated.
+            Default "alle" (all) - for consolidation the chronicle is the most
+            worthwhile case; art="verlauf" tackles it on its own.
+        schwelle: Share of the weighted stems two entries must have in
+            common, 0 to 1. Default 0.5; 0.8 shows only near-copies.
+        gruppen: Maximum number of groups reported (default 5).
     """
     conn = _connect()
     try:
@@ -1922,6 +2067,17 @@ def verdichten(marke: str = "", art: str = "alle", schwelle: float = 0.5, gruppe
         for s in st:
             wo_kommt_vor.setdefault(s, []).append(rid)
     kandidaten = set()
+    # Gleiche Stammmengen sind immer Kandidaten. Ueber die seltenen Staemme
+    # allein fielen Massendubletten durch: ab 26 Kopien (in kleinen Bestaenden
+    # schon ab 6) war jeder ihrer Staemme zu haeufig - gerade der Fall eines
+    # Agenten, der denselben Fakt in einer Schleife immer wieder speichert.
+    gleiche = {}
+    for rid, st in staemme.items():
+        if st:
+            gleiche.setdefault(frozenset(st), []).append(rid)
+    for ids in gleiche.values():
+        for b in ids[1:]:
+            kandidaten.add((min(ids[0], b), max(ids[0], b)))
     for s, ids in wo_kommt_vor.items():
         if 1 < len(ids) <= selten:
             for i, a in enumerate(ids):
@@ -1988,8 +2144,8 @@ def pruefe(ids: str) -> str:
     comes back the same both times is reported, otherwise "uneinig" (disputed). At most
     5 pairs per call, roughly 10 seconds each.
 
-    Opt-in: needs MEMORY_FC_URL and MEMORY_FC_MODELL (any OpenAI-compatible
-    endpoint; MEMORY_FC_SCHLUESSEL if it wants a key). Without them this tool
+    Opt-in: needs MEMORY_FC_URL and MEMORY_FC_MODEL (any OpenAI-compatible
+    endpoint; MEMORY_FC_KEY if it wants a key). Without them this tool
     does nothing and says so. When set up, up to 200 characters of each note
     are sent there.
 
@@ -2045,6 +2201,11 @@ def pruefe(ids: str) -> str:
             gesagt = faktencheck.urteile(richtungen, budget=len(richtungen) * 25)
         except Exception as exc:
             return _t("Faktencheck nicht moeglich: {exc}", exc=exc)
+        if not any(gesagt) and faktencheck.AUS:
+            # Nicht eingerichtet ist kein Ausfall; "nicht erreichbar" schickte
+            # bis 0.3.0 auf die Suche nach einem Netzfehler, den es nicht gab.
+            return _t("Kein Urteil - der Faktencheck ist {zustand}. Am Memory selbst aendert "
+                      "das nichts; einrichten: docs/FACTCHECK.md.", zustand=faktencheck.zustand())
         if not any(gesagt):
             return _t(
                 "Kein Urteil - Geraet nicht erreichbar oder zu langsam ({zustand}). "
@@ -2258,8 +2419,12 @@ def recall(
         elif voll:
             ohne_volltext.append(rid)
         lines.append(_zeile(rid, ts, content, tags, art, ganz, vermerk))
-    kopf = _t("{n} Treffer fuer '{query}'{in_marke}{hinweis}",
-              n=len(lines), query=query, in_marke=in_marke, hinweis=hinweis)
+    if len(lines) == 1:   # "1 hits" im Englischen
+        kopf = _t("1 Treffer fuer '{query}'{in_marke}{hinweis}",
+                  query=query, in_marke=in_marke, hinweis=hinweis)
+    else:
+        kopf = _t("{n} Treffer fuer '{query}'{in_marke}{hinweis}",
+                  n=len(lines), query=query, in_marke=in_marke, hinweis=hinweis)
     if zurueckgehalten and ARCHIV:
         kopf += _t(', {n} Spuren/Verworfene ausgeblendet (art="spur,verworfen")', n=zurueckgehalten)
     elif zurueckgehalten:
@@ -2657,6 +2822,10 @@ def themen(marke: str = "", limit: int = 0, seite: int = 1, alle: bool = False) 
         for rid, _, _, tags, _art in zeilen:
             for m in _marken(tags):
                 tafel.setdefault(m, dict.fromkeys(sorten, 0))[arten[rid]] += 1
+        if not tafel:
+            # max() ueber eine leere Folge warf bis 0.3.0 einen ValueError.
+            return _t("{n} lebende Eintraege, keiner traegt eine Marke. Suchen per "
+                      "recall(query); kuenftig beim Speichern tags= setzen.", n=len(zeilen))
         geordnet = sorted(tafel.items(), key=lambda x: (-sum(x[1].values()), x[0]))
         breite = max(len(m) for m, _ in geordnet[:limit])
         breite = max(breite, len(_t("Marke")))
@@ -2790,7 +2959,15 @@ def zeige(ids: str, voll: bool = False) -> str:
         # dann hat der Aufrufer die Id schon gekannt. Gemerkt wird alles
         # Verlangte, auch was der Deckel auf den naechsten Aufruf schiebt:
         # die Absicht steht in der Anfrage, nicht in der Seitengrenze.
-        _rueckkopplung_merken(conn, gefunden)
+        # Die Rueckkopplung ist eine Zugabe. Bis 0.3.0 machte sie den Lesepfad
+        # zum Schreibpfad: hielt ein anderer Prozess die Schreibsperre laenger
+        # als die Sperrfrist, scheiterte das ganze zeige mit "database is locked".
+        try:
+            _rueckkopplung_merken(conn, gefunden)
+        except sqlite3.Error:
+            traceback.print_exc(file=sys.stderr)
+            if conn.in_transaction:
+                conn.rollback()
     finally:
         conn.close()
 
@@ -2866,12 +3043,16 @@ def einordnen(ids: str, art: str) -> str:
     """Sets the kind of knowledge for existing entries.
 
     Use it in passing on entries recall shows as "gemischt" (unsorted); the
-    backlog need not be sorted in one sitting. Changes only the kind.
+    backlog need not be sorted in one sitting. Writes only the kind - text,
+    tags, ids and superseded status stay as they are - and is undone by
+    classifying again.
 
-    Returns the ids changed, unknown ids and how many are still unsorted.
+    Returns the ids changed, names unknown ids, and how many live entries are
+    still unsorted.
 
     Args:
-        ids: One or more entry ids, e.g. "376,481".
+        ids: One or more entry ids, e.g. "376,481"; a range "376-380" means
+            every id in between.
         art: Exactly one of: schnittstelle (interface), fallstrick (pitfall),
             entscheidung (decision), messwert (measurement), arbeitsweise
             (way of working), verlauf (chronicle). "gemischt" (mixed) undoes
@@ -3158,20 +3339,52 @@ def _archiv_einrichten() -> None:
     _arten_im_schema()
 
 
+# Jeder Schalter in beiden Sprachen; was nicht hier steht, startet nicht.
+_SCHALTER = {"--gast": "gast", "--guest": "gast", "--archiv": "archiv",
+             "--archive": "archiv", "--messbuch": "messbuch"}
+
+_HILFE = """usage: frugal-memory [--guest] [--archive] [--messbuch] [--version]
+
+An MCP server on stdio. Add it to a client instead of running it by hand:
+  claude mcp add memory -s user -- uvx frugal-memory
+
+  --guest     read-only: recall, show and topics only (also --gast)
+  --archive   the literature archive, a file of its own (also --archiv)
+  --messbuch  the lab notebook, a file of its own
+  --version   print the version and exit
+
+The file: MEMORY_DB (ARCHIVE_DB, MESSBUCH_DB), language: MEMORY_LANG=en|de."""
+
+
 def main() -> None:
     """Startpunkt, auch fuer den Befehl `frugal-memory` aus dem Paket.
 
     Ohne Schalter das Gedaechtnis; `--archiv` das Literaturarchiv, `--messbuch`
     das Messbuch - je eine eigene Datei und ein eigener Eintrag beim Client.
-    `--gast` (nur lesen) laesst sich mit `--archiv` verbinden.
+    `--gast`/`--guest` (nur lesen) laesst sich mit `--archiv` verbinden.
     """
     argumente = sys.argv[1:]
-    if "--messbuch" in argumente:
+    if "-h" in argumente or "--help" in argumente:
+        print(_HILFE)
+        return
+    if "--version" in argumente:
+        print(f"frugal-memory {__version__}")
+        return
+    # Unbekanntes wird abgewiesen, nicht uebergangen: bis 0.3.0 startete
+    # `--guest` still einen Server MIT Schreibrechten, weil nur `--gast` galt.
+    unbekannt = [a for a in argumente if a not in _SCHALTER]
+    gewollt = {_SCHALTER[a] for a in argumente if a in _SCHALTER}
+    if not unbekannt and "messbuch" in gewollt and len(gewollt) > 1:
+        unbekannt = ["--messbuch cannot be combined with --guest or --archive"]
+    if unbekannt:
+        sys.stderr.write(f"frugal-memory: {', '.join(unbekannt)} - not started.\n\n{_HILFE}\n")
+        raise SystemExit(2)
+    if "messbuch" in gewollt:
         _messbuch_einrichten()
     else:
-        if "--archiv" in argumente or "--archive" in argumente:
+        if "archiv" in gewollt:
             _archiv_einrichten()
-        if "--gast" in argumente:
+        if "gast" in gewollt:
             _gast_einrichten()
     server.run(transport="stdio")
 

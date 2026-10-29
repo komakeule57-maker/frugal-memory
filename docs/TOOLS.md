@@ -108,7 +108,7 @@ meaning, not word overlap — the same boundary as with language mixing.
 
 That is exactly where the **opt-in fact check** comes in (see [FACTCHECK.md](FACTCHECK.md)): if
 you have pointed `MEMORY_FC_URL` at a small language model of your own,
-named it in `MEMORY_FC_MODELL`, and it answers, every line additionally gets a note on how the two
+named it in `MEMORY_FC_MODEL`, and it answers, every line additionally gets a note on how the two
 entries relate to each other. Unset — the default — none of this happens
 and no network call is made.
 

@@ -10,8 +10,10 @@ Geschrieben wird in `eintrag`, den Speicher ab Schemastand 5; den FTS-Index
 `suche` ziehen die Trigger nach. Die neuen Eintraege tragen die Art 'gemischt'
 und bekommen sie beim Lesen per einordnen().
 
-    python3 import_memos.py [ordner] [--trocken] [--mit-index]
-    frugal-memory-import [ordner] [--trocken] [--mit-index]   (pip-Installation)
+    python3 import_memos.py [ordner] [--dry-run] [--with-index]
+    frugal-memory-import [ordner] [--dry-run] [--with-index]   (pip-Installation)
+
+--trocken und --mit-index gelten weiter als deutsche Schreibweise.
 
 --mit-index nimmt zusaetzlich MEMORY.md auf, und zwar zeilenweise statt
 absatzweise: jeder Listenpunkt ist ein eigener Eintrag. Das ist noetig, bevor
@@ -99,10 +101,31 @@ def rumpf(text: str) -> str:
     return (teile[2] if len(teile) >= 3 else text).strip()
 
 
+HILFE = """usage: frugal-memory-import [folder] [--dry-run] [--with-index]
+
+Imports a folder of markdown memory files (*.md) paragraph by paragraph.
+  --dry-run     only count, store nothing (also --trocken)
+  --with-index  also import MEMORY.md, one entry per list item (also --mit-index)"""
+
+# Jeder Schalter in beiden Sprachen. Bis 0.3.0 galt nur `--trocken`, und ein
+# `--dry-run` wurde uebergangen - der Probelauf importierte wirklich.
+SCHALTER = {"--trocken": "trocken", "--dry-run": "trocken",
+            "--mit-index": "mit_index", "--with-index": "mit_index"}
+
+
 def main() -> int:
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    trocken = "--trocken" in sys.argv
-    mit_index = "--mit-index" in sys.argv
+    if "-h" in sys.argv[1:] or "--help" in sys.argv[1:]:
+        print(HILFE)
+        return 0
+    unbekannt = [a for a in sys.argv[1:] if a.startswith("-") and a not in SCHALTER]
+    if unbekannt:
+        print(f"frugal-memory-import: unknown option {', '.join(unbekannt)} - nothing imported.\n\n{HILFE}",
+              file=sys.stderr)
+        return 2
+    args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    gewollt = {SCHALTER[a] for a in sys.argv[1:] if a in SCHALTER}
+    trocken = "trocken" in gewollt
+    mit_index = "mit_index" in gewollt
     ordner = Path(args[0]).expanduser() if args else standard_ordner()
     if not ordner.is_dir():
         print(f"Kein Ordner: {ordner}")
@@ -139,6 +162,7 @@ def main() -> int:
             for r in conn.execute("SELECT content FROM eintrag")
         }
         neu = uebersprungen = 0
+        neue_ids = []
         for pfad in dateien:
             text = pfad.read_text()
             ts = zeitstempel(pfad, text)
@@ -174,18 +198,19 @@ def main() -> int:
                     # mitfuehren. Bis 2026-10-19 rechnete der Import selbst
                     # und liess die Umschrift-Faltung und beide Verzeichnisse aus.
                     stems, teile = ms._ableitungen(conn, absatz, marke)
-                    conn.execute(
+                    neue_ids.append(conn.execute(
                         "INSERT INTO eintrag (content, tags, ts, stems, teile)"
                         " VALUES (?,?,?,?,?)",
                         (absatz, marke, ts, stems, teile),
-                    )
+                    ).lastrowid)
                     ms._marken_eintragen(conn, marke)
                     ms._vokabel_eintragen(conn, f"{absatz} {marke}")
                     neu += 1
         if not trocken:
-            # Zerschnittene Memos gleich als Kette vermerken, sonst erst beim
-            # naechsten nachziehen.py.
-            ms._ketten_nachtragen(conn)
+            # Zerschnittene Memos als Kette vermerken - nur unter dem, was
+            # dieser Lauf eingelesen hat. Der Import ist der einzige Ort, an
+            # dem Ketten entstehen.
+            ms._ketten_nachtragen(conn, neue_ids)
             conn.commit()
         gesamt = conn.execute("SELECT count(*) FROM eintrag").fetchone()[0]
     finally:

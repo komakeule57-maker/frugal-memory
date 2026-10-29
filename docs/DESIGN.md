@@ -285,8 +285,8 @@ Python. After any intervention outside of `remember`, and after any
 change to `morphologie.py`, this still applies:
 
 ```bash
-frugal-memory-nachziehen [--probe]         # pip install
-.venv/bin/python nachziehen.py [--probe]   # checkout
+frugal-memory-nachziehen [--dry-run]         # pip install
+.venv/bin/python nachziehen.py [--dry-run]   # checkout
 ```
 
 **No write in the connection path.** The server opens the database per

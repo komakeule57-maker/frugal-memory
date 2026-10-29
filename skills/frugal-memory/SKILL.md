@@ -117,7 +117,7 @@ written, not when the thing happened.
   (typically old and new state side by side). It does not merge anything;
   write one new entry and supersede the group via `supersedes=`.
 - `check(ids)` — only if the user has set up a fact-check model
-  (`MEMORY_FC_URL` and `MEMORY_FC_MODELL`). A small model judges whether entries contradict each
+  (`MEMORY_FC_URL` and `MEMORY_FC_MODEL`). A small model judges whether entries contradict each
   other (`CONTRADICTION`), supersede each other (`PROGRESS`) or are
   unrelated (`INDEPENDENT`); `disputed` means it gave different answers
   for the two directions. **Not binding** — it says where to look, not
@@ -126,7 +126,7 @@ written, not when the thing happened.
 
 ## Another machine's memory (guest mode)
 
-A second server started with `--gast` is read-only: only `recall`,
+A second server started with `--guest` (`--gast`) is read-only: only `recall`,
 `show` and `topics`, and every id carries the memory's name (`b#72`).
 `#72` without a name always means the memory being asked; a named id is
 refused by every other memory. **When you write down an id from a guest

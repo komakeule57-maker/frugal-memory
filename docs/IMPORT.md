@@ -4,16 +4,17 @@ Importing an existing folder of `.md` notes, the damage the import did to
 the author's own data, and the repairs that followed.
 
 ```bash
-frugal-memory-import [folder] [--trocken] [--mit-index]       # pip install
+frugal-memory-import [folder] [--dry-run] [--with-index]     # pip install
 uvx --from frugal-memory frugal-memory-import [folder] …      # uv, no install
-.venv/bin/python import_memos.py [folder] [--trocken] …       # checkout
+.venv/bin/python import_memos.py [folder] [--dry-run] …      # checkout
 ```
 
 The import writes to the same file the server uses when installed the same
 way: `~/.local/share/frugal-memory/memory.db` for pip and uvx, `memory.db`
 next to the script for a checkout, `MEMORY_DB` if set. Run it with the same
 `MEMORY_LANG` as the server; a database built in the other language is
-refused rather than mixed. `--trocken` (dry run) only counts.
+refused rather than mixed. `--dry-run` (German: `--trocken`) only counts.
+Unknown options are refused before anything is read.
 
 Reads a folder full of `*.md` files paragraph by paragraph, tag = file
 name, timestamp from the `modified` frontmatter (otherwise file time).
@@ -31,7 +32,7 @@ memos are marked as chains right away (see below), so nothing has to be
 run afterward. Until 2026-10-19 the import computed its own columns and
 needed a `nachziehen.py` run to match the index.
 
-`--mit-index` additionally ingests `MEMORY.md`, line by line instead of
+`--with-index` (`--mit-index`) additionally ingests `MEMORY.md`, line by line instead of
 paragraph by paragraph, and pulls the tag from the line's reference.
 This is a **one-time** step before trimming the index — some facts only
 live there and in no memo file. Don't use it afterward.
@@ -89,8 +90,12 @@ otherwise `` `applyItemsSync` lautlos verschwanden`` would slip through as
 a fragment. The tag is the second safeguard: without it, the last note of
 one project would stick to the first note of the next.
 
-The detection runs again with every `nachziehen.py` and at the end of
-every import, so chains stay correct when entries change. The splitter
+The detection runs at the end of every import, and only over the entries
+that import has just read; chains already marked stay as they are. Until
+0.3.0 every `nachziehen.py` ran it again over the whole memory, and there it
+also bound new, unrelated entries into "split memos" when one happened to
+start in lower case or with "Why …" - `recall` then showed only one of
+them. The splitter
 itself was not fixed: on the author's data the import never runs again,
 and a new import of German notes can produce the same fragments — which
 the chain note then catches. Anyone who ever builds a text splitter again: check the character before

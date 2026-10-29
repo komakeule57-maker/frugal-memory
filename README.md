@@ -166,7 +166,7 @@ instead of accumulate, retry in the other language. Two layers carry them:
 - **The short form comes with the server.** On connecting it sends about
   600 characters of instructions (English, or German with `MEMORY_LANG=de`),
   which Claude Code adds to every session that has the server. Guest mode
-  (`--gast`) sends none, since it cannot store anything.
+  (`--guest`) sends none, since it cannot store anything.
 - **The full rules are a skill.** It ships with the repo and the PyPI
   package; one command installs it:
 
@@ -193,10 +193,10 @@ runs on B, next to its file; the database itself never crosses the network:
 ```
 claude mcp add memory-b -s project -- \
     ssh b /path/to/frugal-memory/.venv/bin/python \
-          /path/to/frugal-memory/memory_server.py --gast
+          /path/to/frugal-memory/memory_server.py --guest
 ```
 
-`--gast` (guest) means three things:
+`--guest` (German: `--gast`) means three things:
 
 - **Read-only.** The file is opened with `mode=ro`, and only `recall`,
   `show` and `topics` are offered. The writing tools are gone, and so are
@@ -246,7 +246,7 @@ claude mcp add archive -s user -- uvx frugal-memory --archive
   so it is never mistaken for a memory id.
 - File: `archive.db` next to the memory's, or `ARCHIVE_DB`. Several
   machines can share one archive by starting it over SSH on the machine
-  that holds the file (without `--gast`, so all of them can write).
+  that holds the file (without `--guest`, so all of them can write).
 
 ### Lab notebook (`--messbuch`)
 
@@ -403,7 +403,7 @@ measured on real questions the way the German search has.
 | `messbuch.py` | the lab notebook (`--messbuch`), German tools |
 | `messbuch_en.py` | its English tools and messages |
 | `texte_en.py` | English messages, keyed by the German text |
-| `nachziehen.py` | recomputes the derived columns, the word and tag directories and the chain marks (`frugal-memory-nachziehen` after pip install) |
+| `nachziehen.py` | recomputes the derived columns and the word and tag directories (`frugal-memory-nachziehen` after pip install) |
 | `faktencheck.py` | opt-in second opinion via any OpenAI-compatible model (off unless configured) |
 | `pruefstand_fc.py` | measures the fact check against gold labels from the dataset |
 | `pruefpaare_gebaut.json` | the hand-built and hand-found contradiction pairs |
@@ -412,7 +412,7 @@ measured on real questions the way the German search has.
 | `test_archiv.py`, `test_messbuch.py` | the tests of the two extensions |
 | `skills/frugal-memory/SKILL.md` | working rules for the agent, as a Claude Code skill (in the package too) |
 | `skill_installieren.py` | copies the skill to `~/.claude/skills/` (`frugal-memory-skill` after pip install) |
-| `requirements.txt` | just `mcp>=2.2.0` |
+| `requirements.txt` | just `mcp>=2.2,<3` |
 | `pyproject.toml` | package definition for PyPI (`frugal-memory`) |
 | `server.json` | entry in the official MCP registry |
 | `memory.db` | the database — created on first use, never committed |
@@ -421,6 +421,13 @@ measured on real questions the way the German search has.
 produced them and their raw data are not included: they only run against
 the author's own dataset, and the raw data is a verbatim transcript of
 real working sessions.
+
+## Feedback
+
+Bug reports, questions and experiences from your own setup are welcome as a
+[GitHub issue](https://github.com/komakeule57-maker/frugal-memory/issues) -
+including "it did not work for me", which is the report this project can
+least get any other way.
 
 ## License
 

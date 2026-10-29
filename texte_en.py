@@ -60,6 +60,8 @@ TEXTE_EN = {
     ' [Stueck {nr} von {anzahl} von "{betreff}", zerschnittenes Memo #{kopf}-#{letzte}]':
         ' [part {nr} of {anzahl} of "{betreff}", split memo #{kopf}-#{letzte}]',
     " [VERALTET: {grund}": " [SUPERSEDED: {grund}",
+    " [VERALTET, ersetzt durch #{durch}]": " [SUPERSEDED, replaced by #{durch}]",
+    " [VERALTET]": " [SUPERSEDED]",
     ", ersetzt durch #{durch}": ", replaced by #{durch}",
     "veraltet": "superseded",
     # --- schema
@@ -90,6 +92,8 @@ TEXTE_EN = {
         "Too few existing entries: {ids} do not exist.",
     "Faktencheck nicht moeglich: {exc}":
         "Fact check not possible: {exc}",
+    "Kein Urteil - der Faktencheck ist {zustand}. Am Memory selbst aendert das nichts; einrichten: docs/FACTCHECK.md.":
+        "No verdict - the fact check is {zustand}. The memory itself is unaffected; setup: docs/FACTCHECK.md.",
     "Kein Urteil - Geraet nicht erreichbar oder zu langsam ({zustand}). Am Memory selbst aendert das nichts.":
         "No verdict - endpoint unreachable or too slow ({zustand}). The memory itself is unaffected.",
     "#{a} <-> #{b}: als Notiz zeichengleich, nicht beurteilbar - entweder Dublette (dann verdichten), oder der Unterschied steckt jenseits der ersten {maxz} Zeichen und das Modell sieht ihn nicht":
@@ -115,6 +119,12 @@ TEXTE_EN = {
         "Error: give exactly one kind. Possible: {arten}, {unsortiert} (undoes the classification).",
     "Fehler: keine Id angegeben.": "Error: no id given.",
     " (nicht gefunden: {ids})": " (not found: {ids})",
+    "Fehler: ersetzt= nennt {ids}, die es nicht gibt - nichts gespeichert. Nummer pruefen oder ersetzt= weglassen.":
+        "Error: supersedes= names {ids}, which do not exist - nothing stored. Check the id or leave supersedes= out.",
+    "{n} lebende Eintraege, keiner traegt eine Marke. Suchen per recall(query); kuenftig beim Speichern tags= setzen.":
+        "{n} live entries, none of them has a tag. Search with recall(query); set tags= when storing from now on.",
+    "Der Bereich #{von}-#{bis} umfasst mehr als {n} Nummern - nichts getan. Kleiner fassen oder einzeln nennen.":
+        "The range #{von}-#{bis} spans more than {n} ids - nothing done. Narrow it or list the ids.",
     "\nNoch {n} Eintraege ohne Art.": "\n{n} entries still without a kind.",
     # --- recall
     "Fehler: 'query' ist leer.": "Error: 'query' is empty.",
@@ -127,6 +137,8 @@ TEXTE_EN = {
         ' - but {n} in the hidden history. kind="history" shows them.',
     "{n} Treffer fuer '{query}'{in_marke}{hinweis}":
         "{n} hits for '{query}'{in_marke}{hinweis}",
+    "1 Treffer fuer '{query}'{in_marke}{hinweis}":
+        "1 hit for '{query}'{in_marke}{hinweis}",
     ', {n} in der Chronik ausgeblendet (art="verlauf")':
         ', {n} hidden in history (kind="history")',
     ' - Vorschau, Volltext per zeige("{ids}")':

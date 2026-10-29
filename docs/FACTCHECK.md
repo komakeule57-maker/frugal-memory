@@ -16,11 +16,11 @@ Any **OpenAI-compatible** endpoint works — a model on your own machine
 
 ```bash
 # local, no key needed
-MEMORY_FC_URL=http://localhost:11434    MEMORY_FC_MODELL=qwen2.5:3b
+MEMORY_FC_URL=http://localhost:11434    MEMORY_FC_MODEL=qwen2.5:3b
 
 # a cloud provider
-MEMORY_FC_URL=https://api.example.com/v1  MEMORY_FC_MODELL=some-model \
-MEMORY_FC_SCHLUESSEL=sk-…                 MEMORY_FC_PROBE=0
+MEMORY_FC_URL=https://api.example.com/v1  MEMORY_FC_MODEL=some-model \
+MEMORY_FC_KEY=sk-…                      MEMORY_FC_PROBE=0
 ```
 
 Both spellings of the base URL are accepted, with or without the trailing
@@ -32,7 +32,7 @@ silence.
 > **This is the one place where note content leaves the machine, and it
 > is off until you turn it on.** There is deliberately no default address
 > and no default model: unless **both** `MEMORY_FC_URL` and
-> `MEMORY_FC_MODELL` are set, `faktencheck.py` never starts up, makes no
+> `MEMORY_FC_MODEL` are set, `faktencheck.py` never starts up, makes no
 > network call of any kind, and `remember`'s output is exactly what it is
 > without the module. When it is on, each judged pair sends up to 200
 > characters from each of the two notes to that endpoint as a prompt.
@@ -195,9 +195,9 @@ Settings via the environment:
 | Variable | Default | |
 |---|---|---|
 | `MEMORY_FC_URL` | **unset — the whole module stays off** | base address of an OpenAI-compatible endpoint, with or without a trailing `/v1`. A wrong address does not announce itself; the fact check simply stays silent as it does on any failure |
-| `MEMORY_FC_MODELL` | **unset — the whole module stays off** | the model id to ask for. Both this and the URL are required; either one missing means the module never starts |
-| `MEMORY_FC_SCHLUESSEL` | empty | sent as `Authorization: Bearer …` for providers that need it. Never appears in any output, not even in error messages |
-| `MEMORY_FC_AUS` | empty | set to `1` to turn the fact check off without dropping the address |
+| `MEMORY_FC_MODEL` (or `MEMORY_FC_MODELL`) | **unset — the whole module stays off** | the model id to ask for. Both this and the URL are required; either one missing means the module never starts |
+| `MEMORY_FC_KEY` (or `MEMORY_FC_SCHLUESSEL`) | empty | sent as `Authorization: Bearer …` for providers that need it. Never appears in any output, not even in error messages |
+| `MEMORY_FC_OFF` (or `MEMORY_FC_AUS`) | empty | set to `1` to turn the fact check off without dropping the address |
 | `MEMORY_FC_PROBE` | `3.0` | seconds for the `/v1/models` pre-check. **`0` skips it entirely** — useful where the endpoint lists hundreds of ids, or one that isn't the one you ask with, in which case the model check would lock out a perfectly healthy provider. It also saves one request per call; the pre-check exists for a device that is often gone, not for a datacenter |
 | `MEMORY_FC_ZEICHEN` | `200` | note text per side; 200 is the measured sweet spot |
 | `MEMORY_FC_BUDGET` | `25` | seconds across all pairs of one `remember`; `check` ignores it and allows 25 s per direction asked |

@@ -135,14 +135,15 @@ def test_server_startet_mit_schalter_und_englisch():
     tmp = Path(tempfile.mkdtemp(prefix="archtest-start-"))
     code = """
 import sys, memory_server as ms
-sys.argv += ["--archiv"]
+art = sys.argv[1]
+sys.argv = ["frugal-memory", "--archiv"]
 ms.server.run = lambda **k: None
 ms.main()
 w = {t.name: t.description for t in ms.server._tool_manager.list_tools()}
 print(sorted(w))
 print(ms.DB_PATH.name, ms.NAME)
 print("finding" in w["remember"] or "befund" in w["remember"], "pitfall" in w["remember"] or "fallstrick" in w["remember"])
-print(ms.remember("A paper, https://arxiv.org/abs/2405.03637 Evidence: abstract", tags="t", art=sys.argv[1]))
+print(ms.remember("A paper, https://arxiv.org/abs/2405.03637 Evidence: abstract", tags="t", art=art))
 """
     for sprache, art, name, gespeichert in (("de", "befund", "archiv", "Gespeichert archiv#1"),
                                              ("en", "finding", "archive", "Stored archive#1")):
