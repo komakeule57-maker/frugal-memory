@@ -1,6 +1,6 @@
 ---
 name: frugal-memory
-description: How to work with the frugal-memory server (tools recall, show, topics, remember, forget, classify, consolidate, check — in German mode zeige, themen, vergessen, einordnen, verdichten, pruefe). Use it whenever these tools are available and the question touches past work — earlier projects, decisions, pitfalls, measurements, how the user likes to work — before searching files for it, and whenever something worth keeping comes up that the next session should know.
+description: How to work with the frugal-memory server (tools recall, show, topics, remember, edit, forget, classify, consolidate, check — in German mode zeige, themen, bearbeiten, vergessen, einordnen, verdichten, pruefe). Use it whenever these tools are available and the question touches past work — earlier projects, decisions, pitfalls, measurements, how the user likes to work — before searching files for it, and whenever something worth keeping comes up that the next session should know.
 ---
 
 # Working with frugal-memory
@@ -102,6 +102,9 @@ numbers differ ("numbers 186 -> 242"). That is the moment to decide:
 - An old entry is simply wrong and has no successor →
   `forget("12", reason="...")`.
 - Both are true side by side → leave them.
+
+A typo, a wrong tag or kind in one entry → `edit(12, tags="...")`. Empty
+fields keep their value; the old version stays readable as superseded.
 
 Nothing is ever deleted; retired entries stay findable with their reason.
 Retired one by mistake? `forget("12", undo=True)` brings it back.

@@ -232,7 +232,7 @@ and its value lies in the find another project already made.
 claude mcp add archive -s user -- uvx frugal-memory --archive
 ```
 
-- Same eight tools, other kinds: `finding`, `method`, `survey`,
+- Same nine tools, other kinds: `finding`, `method`, `survey`,
   `resource` (code, dataset), `gap` (searched, nowhere measured), `lead`
   (unchecked) and `rejected` (checked and rejected — e.g. a citation a
   language model made up). Leads and rejected entries are hidden from
@@ -280,7 +280,7 @@ claude mcp add messbuch -s user -- uvx frugal-memory --messbuch
   notebook must carry the memory's name (`laptop#452`): the notebook may
   be shared by machines whose memories all count from 1.
 
-## The Eight Tools
+## The Nine Tools
 
 | | |
 |---|---|
@@ -290,6 +290,7 @@ claude mcp add messbuch -s user -- uvx frugal-memory --messbuch
 | `topics(tag, limit, page, all)` | browse: which projects exist, or one project's title lines, newest first, a page at a time |
 | `forget(ids, reason, undo)` | mark as outdated — never deletes; `undo=True` brings entries back |
 | `classify(ids, kind)` | assign the knowledge kind of existing entries |
+| `edit(id, text, tags, kind, reason)` | change one entry; the old version stays readable as superseded |
 | `consolidate(tag, kind, …)` | find groups of entries that say much the same thing |
 | `check(ids)` | opt-in: have a language model judge contradiction vs. newer state |
 
@@ -341,7 +342,7 @@ see [The Ranking Fix, Corrected Twice](https://github.com/komakeule57-maker/frug
 
 | | |
 |---|---|
-| [docs/TOOLS.md](https://github.com/komakeule57-maker/frugal-memory/blob/main/docs/TOOLS.md) | all eight tools in detail |
+| [docs/TOOLS.md](https://github.com/komakeule57-maker/frugal-memory/blob/main/docs/TOOLS.md) | all nine tools in detail |
 | [docs/DESIGN.md](https://github.com/komakeule57-maker/frugal-memory/blob/main/docs/DESIGN.md) | the two axes, the morphology, the database schema, and what was left out on purpose |
 | [docs/MEASUREMENTS.md](https://github.com/komakeule57-maker/frugal-memory/blob/main/docs/MEASUREMENTS.md) | what was measured, and the known limitations |
 | [docs/FACTCHECK.md](https://github.com/komakeule57-maker/frugal-memory/blob/main/docs/FACTCHECK.md) | the opt-in fact check: setup, what it can and cannot do |
@@ -362,8 +363,8 @@ conversations, gave 89.8 % in English mode and 89.7 % in German mode.) Then
 - the tools are `remember(text, tags, art, ersetzt)`,
   `recall(query, limit, art, marke, voll, mit_veraltet)`, `zeige(ids, voll)`,
   `themen(marke, limit, seite, alle)`, `vergessen(ids, grund, rueckgaengig)`,
-  `einordnen(ids, art)`, `verdichten(marke, art, schwelle, gruppen)` and
-  `pruefe(ids)`,
+  `einordnen(ids, art)`, `verdichten(marke, art, schwelle, gruppen)`,
+  `pruefe(ids)` and `bearbeiten(id, text, tags, art, grund)`,
 - the kinds are `schnittstelle`, `fallstrick`, `entscheidung`, `messwert`,
   `arbeitsweise`, `verlauf`, `gemischt`,
 - every message is German,
@@ -397,7 +398,7 @@ measured on real questions the way the German search has.
 
 | | |
 |---|---|
-| `memory_server.py` | MCP server, eight tools, search cascade, schema, migrations |
+| `memory_server.py` | MCP server, nine tools, search cascade, schema, migrations |
 | `morphologie.py` | stemmers: a small English one (default) and a German one with compound splitting (`MEMORY_LANG=de`) |
 | `werkzeuge_en.py` | the English tool surface (the default) |
 | `messbuch.py` | the lab notebook (`--messbuch`), German tools |

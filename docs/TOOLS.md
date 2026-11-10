@@ -1,6 +1,6 @@
 # Tools
 
-Reference for all eight MCP tools. The fact check behind `check` has its
+Reference for all nine MCP tools. The fact check behind `check` has its
 own page: [FACTCHECK.md](FACTCHECK.md).
 
 Names are the English defaults. With `MEMORY_LANG=de` (or a German memory
@@ -14,6 +14,7 @@ from before 0.3.0) the same tools and parameters are called:
 | `classify(ids, kind)` | `einordnen(ids, art)` |
 | `consolidate(tag, kind, threshold, groups)` | `verdichten(marke, art, schwelle, gruppen)` |
 | `check(ids)` | `pruefe(ids)` |
+| `edit(id, text, tags, kind, reason)` | `bearbeiten(id, text, tags, art, grund)` |
 | `remember(…, kind, supersedes)`, `recall(…, kind, tag, full, include_superseded)` | `remember(…, art, ersetzt)`, `recall(…, art, marke, voll, mit_veraltet)` |
 | kinds `interface`, `pitfall`, `decision`, `measurement`, `workflow`, `history`, `unsorted`, `all` | `schnittstelle`, `fallstrick`, `entscheidung`, `messwert`, `arbeitsweise`, `verlauf`, `gemischt`, `alle` |
 
@@ -160,6 +161,23 @@ with their old id and date. This works for superseded entries too; the
 answer then says that both the old and the new entry count again. The
 notes of the undone retirement are not deleted either, they move to the
 table `veraltet_aufgehoben`.
+
+## `edit(id, text="", tags="", kind="", reason="")`
+
+Changes one entry's text, tags or kind. Fields left empty keep their value,
+so fixing a tag doesn't mean retyping the text.
+
+**Under the hood it is a successor, not an overwrite.** The changed entry
+gets a new id and the old one is marked as superseded by it, with the note
+`edited: <reason>`. `show` on the old id still returns the old wording, so
+it stays traceable what was valid when — the same principle as
+`remember(..., supersedes=)`, just without copying tags and kind by hand.
+The new entry carries today's date.
+
+It refuses instead of forking: an entry that is already superseded by
+another is not edited (the answer names the successor to edit instead), and
+a forgotten one has to be brought back with `forget(..., undo=True)` first.
+An edit that changes nothing is reported and stores nothing.
 
 ## `recall(query, limit=8, kind="", tag="", full=False, include_superseded=False)`
 

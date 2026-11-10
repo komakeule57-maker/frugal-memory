@@ -339,7 +339,7 @@ _TRENNER = re.compile(r"[\s,]+")
 
 # Die einzige Stelle mit der Versionsnummer: pyproject.toml liest sie von hier,
 # und der Server meldet sie jedem Client beim Verbinden (serverInfo).
-__version__ = "0.3.1"
+__version__ = "0.4.0"
 
 # Die Arbeitsregeln in Kurzform. Claude Code legt sie jeder Sitzung bei, in
 # der der Server eingebunden ist - auch dort, wo nur `uvx frugal-memory`
@@ -1673,6 +1673,11 @@ def remember(text: str, tags: str = "", art: str = "", ersetzt: str = "") -> str
             from recall's default view). Empty = gemischt (unsorted).
         ersetzt: Ids this entry supersedes, e.g. "12,34". Hidden, not deleted.
     """
+    return _merken(text, tags, art, ersetzt)
+
+
+def _merken(text: str, tags: str, art: str, ersetzt: str, grund: str = "ersetzt") -> str:
+    """Der Rumpf von remember; `bearbeiten` ruft ihn mit eigenem Grund fuer den Vermerk."""
     text = text.strip()
     if not text:
         return _t("Fehler: 'text' ist leer - nichts gespeichert.")
@@ -1728,7 +1733,7 @@ def remember(text: str, tags: str = "", art: str = "", ersetzt: str = "") -> str
             # zerlegen plus am eigenen Wortschatz, den `_vokabular` ohnehin
             # dazunimmt. Umgekehrt waere dasselbe Ergebnis, nur unklarer.
             _vokabel_eintragen(conn, f"{text} {tags}")
-            abgeloest = _veralten(conn, ersetzt, durch=neu_id, grund="ersetzt")
+            abgeloest = _veralten(conn, ersetzt, durch=neu_id, grund=grund)
             conn.commit()
         except sqlite3.Error as exc:
             conn.rollback()
@@ -2294,6 +2299,51 @@ def vergessen(ids: str, grund: str = "", rueckgaengig: bool = False) -> str:
     if fehlt:
         aus += _t(" (nicht gefunden: {ids})", ids=", ".join("#" + str(i) for i in fehlt))
     return aus
+
+
+@_schreibend
+def bearbeiten(id: int, text: str = "", tags: str = "", art: str = "", grund: str = "") -> str:
+    """Changes one entry's text, tags or kind.
+
+    Under the hood a successor: the changed entry gets a new id, the old one is
+    marked as superseded by it, so what was valid when stays traceable. Fields
+    left empty keep their value.
+
+    Returns the new id, as remember does.
+
+    Args:
+        id: The entry to change.
+        text: New text; empty keeps the old one.
+        tags: New tags; empty keeps the old ones.
+        art: New kind; empty keeps the old one.
+        grund: Why - shown on the old entry.
+    """
+    conn = _connect()
+    try:
+        alt = conn.execute("SELECT content, tags, art FROM eintrag WHERE id = ?", (id,)).fetchone()
+        stand = _veraltungen(conn) if alt else {}
+    finally:
+        conn.close()
+    if not alt:
+        return _t("Fehler: #{id} gibt es nicht - nichts geaendert.", id=id)
+    if id in stand:
+        durch = stand[id][0]
+        # Sonst entstuenden zwei lebende Nachfolger desselben Eintrags.
+        return (_t("Fehler: #{id} ist schon abgeloest durch #{durch} - diesen bearbeiten.",
+                   id=id, durch=durch) if durch else
+                _t("Fehler: #{id} ist veraltet - erst vergessen(rueckgaengig=True), "
+                   "dann bearbeiten.", id=id))
+    neu_text = text.strip() or alt[0]
+    neu_tags = tags.strip() or alt[1] or ""
+    neu_art = art.strip() or alt[2]
+    try:
+        gewaehlt = _arten_lesen(neu_art)
+    except ValueError as exc:
+        return _t("Fehler: {exc} - nichts gespeichert.", exc=exc)
+    if (neu_text, neu_tags, gewaehlt) == (alt[0], alt[1] or "", [alt[2]]):
+        return _t("Nichts geaendert: Text, Tags und Art sind wie bei #{id}.", id=id)
+    vermerk = _t("bearbeitet") + (f": {grund.strip()}" if grund.strip() else "")
+    return _merken(neu_text, neu_tags, neu_art, str(id), grund=vermerk)
 
 
 @_lesend
@@ -3200,12 +3250,12 @@ def _arten_im_schema() -> None:
         return
     feld = "kind" if _en() else "art"
     for werkzeug in werkzeuge:
-        if werkzeug.name not in ("remember", "einordnen", "classify"):
+        if werkzeug.name not in ("remember", "einordnen", "classify", "bearbeiten", "edit"):
             continue
         eigenschaft = werkzeug.parameters.get("properties", {}).get(feld)
         if not isinstance(eigenschaft, dict):
             continue
-        arten = list(ARTEN) + ([UNSORTIERT] if werkzeug.name != "remember" else [])
+        arten = list(ARTEN) + ([UNSORTIERT] if werkzeug.name in ("einordnen", "classify") else [])
         eigenschaft["enum"] = [_art_aus(a) for a in arten]
 
 

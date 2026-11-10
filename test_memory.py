@@ -415,6 +415,49 @@ def test_zweimaliges_abloesen_gibt_zwei_vermerke():
     assert (durch, grund) == (2, "ersetzt"), (durch, grund)
 
 
+def test_bearbeiten_loest_ab_und_behaelt_leere_felder():
+    """Glama (2026-10-30) vermisste ein Werkzeug zum Bearbeiten (chrometop#731).
+    Gebaut als Abloesung unter der Haube: der alte Text bleibt nachlesbar,
+    und was leer bleibt, wird vom alten Eintrag uebernommen."""
+    ms.remember("Die Ankerkette ist zu kurz", tags="schiff", art="fallstrick")
+    aus = ms.bearbeiten(1, text="Die Ankerkette ist zwei Meter zu kurz", grund="Laenge gemessen")
+    assert "#2" in aus and "#1" in aus, aus
+    conn = ms._connect()
+    neu = conn.execute("SELECT content, tags, art FROM eintrag WHERE id = 2").fetchone()
+    durch, grund = ms._veraltungen(conn)[1]
+    conn.close()
+    assert neu == ("Die Ankerkette ist zwei Meter zu kurz", "schiff", "fallstrick"), neu
+    assert (durch, grund) == (2, "bearbeitet: Laenge gemessen"), (durch, grund)
+    assert "#1" not in ms.recall("Ankerkette") and "#2" in ms.recall("Ankerkette")
+    assert "bearbeitet: Laenge gemessen" in ms.zeige("1")
+
+
+def test_bearbeiten_nur_tags_oder_art():
+    ms.remember("Die Ankerkette ist zu kurz", tags="schiff", art="fallstrick")
+    ms.bearbeiten(1, tags="schiff hafen")
+    ms.bearbeiten(2, art="entscheidung")
+    conn = ms._connect()
+    zeilen = conn.execute("SELECT id, content, tags, art FROM eintrag ORDER BY id").fetchall()
+    conn.close()
+    assert zeilen[2] == (3, "Die Ankerkette ist zu kurz", "schiff hafen", "entscheidung"), zeilen
+
+
+def test_bearbeiten_weist_ab_statt_zu_verzweigen():
+    """Ein abgeloester Eintrag haette nach dem Bearbeiten zwei lebende
+    Nachfolger - genau das, was Abloesen verhindern soll."""
+    ms.remember("Alpha", tags="probe", art="fallstrick")
+    ms.bearbeiten(1, text="Alpha zwei")
+    aus = ms.bearbeiten(1, text="Alpha drei")
+    assert "#2" in aus and _zaehle("eintrag") == 2, aus
+    ms.vergessen("2", grund="falsch")
+    assert "rueckgaengig" in ms.bearbeiten(2, text="Alpha vier")
+    assert "nicht" in ms.bearbeiten(99, text="x") and _zaehle("eintrag") == 2
+    ms.remember("Beta", tags="probe", art="fallstrick")
+    assert "Nichts geaendert" in ms.bearbeiten(3, text="Beta", tags="probe")
+    assert "Unbekannte Art" in ms.bearbeiten(3, art="quatsch")
+    assert _zaehle("eintrag") == 3 and _zaehle("veraltet") == 2
+
+
 def test_rueckgaengig_holt_vergessenes_und_abgeloestes_zurueck():
     """Glama (2026-10-23): ein versehentliches `vergessen` liess sich nur durch
     Neuspeichern beheben - mit neuer Nummer und neuem Datum. Der Schalter holt
@@ -1753,11 +1796,11 @@ def test_gast_kann_nicht_schreiben():
 
 
 def test_gast_sieht_nur_suchen_lesen_blaettern():
-    """Und der Hausbetrieb behaelt alle acht - die Kuerzung gilt nur dem Gast."""
+    """Und der Hausbetrieb behaelt alle neun - die Kuerzung gilt nur dem Gast."""
     import subprocess
     haus = {w.name for w in ms.server._tool_manager.list_tools()}
-    assert {"remember", "vergessen", "einordnen", "verdichten", "pruefe"} <= haus, haus
-    assert len(haus) == 8, haus
+    assert {"remember", "vergessen", "einordnen", "verdichten", "pruefe", "bearbeiten"} <= haus, haus
+    assert len(haus) == 9, haus
     aus = subprocess.run(
         [sys.executable, "-c",
          "import memory_server as ms; ms._gast_einrichten();"
@@ -1898,7 +1941,7 @@ def test_en_server_bietet_nur_englische_werkzeuge():
     namen = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True,
                            env=umgebung, cwd=Path(__file__).resolve().parent, check=True).stdout
     assert namen.strip() == str(sorted(["remember", "recall", "show", "topics", "consolidate",
-                                        "check", "forget", "classify"])), namen
+                                        "check", "forget", "classify", "edit"])), namen
 
 
 def test_sprachwechsel_ohne_nachziehen_wird_abgewiesen():

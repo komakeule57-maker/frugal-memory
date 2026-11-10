@@ -195,4 +195,23 @@ def classify(ids: str, kind: str) -> str:
     return ms.einordnen(ids, art=kind)
 
 
-WERKZEUGE = (remember, recall, show, topics, consolidate, check, forget, classify)
+def edit(id: int, text: str = "", tags: str = "", kind: str = "", reason: str = "") -> str:
+    """Changes one entry's text, tags or kind.
+
+    Under the hood a successor: the changed entry gets a new id, the old one is
+    marked as superseded by it, so what was valid when stays traceable. Fields
+    left empty keep their value.
+
+    Returns the new id, as remember does.
+
+    Args:
+        id: The entry to change.
+        text: New text; empty keeps the old one.
+        tags: New tags; empty keeps the old ones.
+        kind: New kind; empty keeps the old one.
+        reason: Why - shown on the old entry.
+    """
+    return ms.bearbeiten(id, text=text, tags=tags, art=kind, grund=reason)
+
+
+WERKZEUGE = (remember, recall, show, topics, consolidate, check, forget, classify, edit)

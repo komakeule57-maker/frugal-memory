@@ -201,4 +201,14 @@ TEXTE_EN = {
         ' - but {n} leads/rejected hidden. kind="lead,rejected" shows them.',
     ', {n} Spuren/Verworfene ausgeblendet (art="spur,verworfen")':
         ', {n} leads/rejected hidden (kind="lead,rejected")',
+    # --- bearbeiten (edit)
+    "Fehler: #{id} gibt es nicht - nichts geaendert.":
+        "Error: #{id} does not exist - nothing changed.",
+    "Fehler: #{id} ist schon abgeloest durch #{durch} - diesen bearbeiten.":
+        "Error: #{id} is already superseded by #{durch} - edit that one.",
+    "Fehler: #{id} ist veraltet - erst vergessen(rueckgaengig=True), dann bearbeiten.":
+        "Error: #{id} is superseded - forget(undo=True) first, then edit.",
+    "Nichts geaendert: Text, Tags und Art sind wie bei #{id}.":
+        "Nothing changed: text, tags and kind are the same as in #{id}.",
+    "bearbeitet": "edited",
 }
