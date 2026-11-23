@@ -182,6 +182,8 @@ def classify(ids: str, kind: str) -> str:
     Use it in passing on entries recall shows as "unsorted"; the backlog need
     not be sorted in one sitting. Writes only the kind - text, tags, ids and
     superseded status stay as they are - and is undone by classifying again.
+    It does not change the text; for that, use edit, or
+    remember(supersedes=...) when the knowledge has moved on.
 
     Returns the ids changed, names unknown ids, and how many live entries are
     still unsorted.
@@ -196,13 +198,21 @@ def classify(ids: str, kind: str) -> str:
 
 
 def edit(id: int, text: str = "", tags: str = "", kind: str = "", reason: str = "") -> str:
-    """Changes one entry's text, tags or kind.
+    """Changes one existing entry's text, tags or kind - to fix it.
+
+    Use it for corrections of the same fact: a typo, a wrong number, a wrong
+    tag. Knowledge that has moved on is a new fact: remember(...) with
+    supersedes= the old id. To change only the kind of several entries, use
+    classify.
 
     Under the hood a successor: the changed entry gets a new id, the old one is
-    marked as superseded by it, so what was valid when stays traceable. Fields
-    left empty keep their value.
+    superseded by it - hidden from recall, still readable with show. Fields
+    left empty keep their value. Undo: forget the new id, then
+    forget(old id, undo=True).
 
-    Returns the new id, as remember does.
+    Returns the new id, as remember does. An unknown id, an entry already
+    superseded (the answer names its successor) or an edit that changes
+    nothing stores nothing.
 
     Args:
         id: The entry to change.

@@ -122,6 +122,15 @@ GAST = False
 # findet, muss sie abloesen koennen, und das kann nur der Besitzer. Sie kosteten
 # den Gast 3.014 von 6.635 Zeichen Werkzeugbeschreibung, in jeder Sitzung.
 GASTWERKZEUGE = ("recall", "zeige", "themen", "show", "topics")  # deutsch und englisch
+# Werkzeuge, die dieser Server nicht anbietet: jede Beschreibung kostet in jeder
+# Sitzung Zeichen, auch wenn das Werkzeug nie gerufen wird. Deutsch oder
+# englisch, das Gegenstueck faellt mit weg ("edit" schaltet auch "bearbeiten" ab).
+_PAARE = {"remember": "remember", "recall": "recall", "zeige": "show", "themen": "topics",
+          "verdichten": "consolidate", "pruefe": "check", "vergessen": "forget",
+          "einordnen": "classify", "bearbeiten": "edit"}
+_AUS_ROH = {w for w in re.split(r"[\s,]+", os.environ.get("MEMORY_TOOLS_OFF", "").lower()) if w}
+WERKZEUGE_AUS = (_AUS_ROH | {e for d, e in _PAARE.items() if d in _AUS_ROH}
+                 | {d for d, e in _PAARE.items() if e in _AUS_ROH})
 
 # Die Spalten des INDEX. `ts` steht nicht darin - das Datum ist zum Anzeigen
 # da, nie ein Suchwort. Bis Stand 4 war das eine Verabredung (`UNINDEXED`) in
@@ -339,7 +348,7 @@ _TRENNER = re.compile(r"[\s,]+")
 
 # Die einzige Stelle mit der Versionsnummer: pyproject.toml liest sie von hier,
 # und der Server meldet sie jedem Client beim Verbinden (serverInfo).
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 # Die Arbeitsregeln in Kurzform. Claude Code legt sie jeder Sitzung bei, in
 # der der Server eingebunden ist - auch dort, wo nur `uvx frugal-memory`
@@ -2303,13 +2312,21 @@ def vergessen(ids: str, grund: str = "", rueckgaengig: bool = False) -> str:
 
 @_schreibend
 def bearbeiten(id: int, text: str = "", tags: str = "", art: str = "", grund: str = "") -> str:
-    """Changes one entry's text, tags or kind.
+    """Changes one existing entry's text, tags or kind - to fix it.
+
+    Use it for corrections of the same fact: a typo, a wrong number, a wrong
+    tag. Knowledge that has moved on is a new fact: remember(...) with
+    ersetzt= the old id. To change only the kind of several entries, use
+    einordnen.
 
     Under the hood a successor: the changed entry gets a new id, the old one is
-    marked as superseded by it, so what was valid when stays traceable. Fields
-    left empty keep their value.
+    superseded by it - hidden from recall, still readable with zeige. Fields
+    left empty keep their value. Undo: vergessen the new id, then
+    vergessen(old id, rueckgaengig=True).
 
-    Returns the new id, as remember does.
+    Returns the new id, as remember does. An unknown id, an entry already
+    superseded (the answer names its successor) or an edit that changes
+    nothing stores nothing.
 
     Args:
         id: The entry to change.
@@ -3095,7 +3112,8 @@ def einordnen(ids: str, art: str) -> str:
     Use it in passing on entries recall shows as "gemischt" (unsorted); the
     backlog need not be sorted in one sitting. Writes only the kind - text,
     tags, ids and superseded status stay as they are - and is undone by
-    classifying again.
+    classifying again. It does not change the text; for that, use bearbeiten,
+    or remember(ersetzt=...) when the knowledge has moved on.
 
     Returns the ids changed, names unknown ids, and how many live entries are
     still unsorted.
@@ -3232,6 +3250,9 @@ def _sprache_einrichten() -> None:
             verwaltung.remove_tool(werkzeug.name)
         for fn in gewollt:
             server.tool()(fn)
+    for werkzeug in list(verwaltung.list_tools()):
+        if werkzeug.name in WERKZEUGE_AUS:
+            verwaltung.remove_tool(werkzeug.name)
     _schema_entrumpeln()
     _arten_im_schema()
 

@@ -430,6 +430,10 @@ def test_bearbeiten_loest_ab_und_behaelt_leere_felder():
     assert (durch, grund) == (2, "bearbeitet: Laenge gemessen"), (durch, grund)
     assert "#1" not in ms.recall("Ankerkette") and "#2" in ms.recall("Ankerkette")
     assert "bearbeitet: Laenge gemessen" in ms.zeige("1")
+    # Der Rueckweg, den die Beschreibung verspricht: Nachfolger vergessen, Vorgaenger zurueckholen.
+    ms.vergessen("2", grund="doch nicht")
+    ms.vergessen("1", rueckgaengig=True)
+    assert "#1" in ms.recall("Ankerkette") and "#2" not in ms.recall("Ankerkette")
 
 
 def test_bearbeiten_nur_tags_oder_art():
@@ -1942,6 +1946,22 @@ def test_en_server_bietet_nur_englische_werkzeuge():
                            env=umgebung, cwd=Path(__file__).resolve().parent, check=True).stdout
     assert namen.strip() == str(sorted(["remember", "recall", "show", "topics", "consolidate",
                                         "check", "forget", "classify", "edit"])), namen
+
+
+def test_abgeschaltete_werkzeuge_fehlen_in_beiden_sprachen():
+    """Jede Beschreibung kostet in jeder Sitzung - wer ein Werkzeug nie braucht,
+    soll es weglassen koennen, und der Name der anderen Sprache gilt mit."""
+    import subprocess
+    probe = ("import memory_server as ms; "
+             "print(sorted(t.name for t in ms.server._tool_manager.list_tools()))")
+    for sprache, aus, fehlt in (("de", "edit", "bearbeiten"), ("en", "bearbeiten, check", "edit")):
+        namen = subprocess.run(
+            [sys.executable, "-c", probe], capture_output=True, text=True, check=True,
+            env=dict(os.environ, MEMORY_LANG=sprache, MEMORY_TOOLS_OFF=aus, MEMORY_FC_AUS="1",
+                     MEMORY_DB=str(ms.DB_PATH.parent / f"aus-{sprache}.db")),
+            cwd=Path(__file__).resolve().parent).stdout
+        assert fehlt not in namen and "recall" in namen, (sprache, namen)
+        assert sprache == "de" or "check" not in namen, namen
 
 
 def test_sprachwechsel_ohne_nachziehen_wird_abgewiesen():

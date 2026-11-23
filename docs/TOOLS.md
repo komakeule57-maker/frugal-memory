@@ -179,6 +179,11 @@ another is not edited (the answer names the successor to edit instead), and
 a forgotten one has to be brought back with `forget(..., undo=True)` first.
 An edit that changes nothing is reported and stores nothing.
 
+`edit` is for correcting the same fact (a typo, a wrong number, a wrong
+tag). When the knowledge itself has moved on, store a new entry with
+`remember(..., supersedes=)` instead, so the history reads as such.
+To undo an edit: `forget` the new id, then `forget(old id, undo=True)`.
+
 ## `recall(query, limit=8, kind="", tag="", full=False, include_superseded=False)`
 
 Full-text search, best match first. The default is a **preview**:
@@ -388,5 +393,7 @@ from cutting silently:
 Sets the kind of knowledge for existing entries and reports how many are
 still without a kind. Meant for doing in passing: whatever `recall`
 surfaces anyway gets its kind assigned along the way.
-`classify(ids, "unsorted")` undoes the classification.
+`classify(ids, "unsorted")` undoes the classification. It never touches the
+text: a wrong wording is fixed with `edit`, knowledge that has moved on is a
+new entry with `remember(..., supersedes=)`.
 

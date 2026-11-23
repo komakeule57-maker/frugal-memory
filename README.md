@@ -2,6 +2,8 @@
 
 <!-- mcp-name: io.github.komakeule57-maker/frugal-memory -->
 
+[![komakeule57-maker/frugal-memory MCP server](https://glama.ai/mcp/servers/komakeule57-maker/frugal-memory/badges/score.svg)](https://glama.ai/mcp/servers/komakeule57-maker/frugal-memory)
+
 A persistent memory for AI assistants that is just a SQLite file — and
 costs about a fifth of what reading markdown notes does.
 
@@ -133,6 +135,10 @@ claude mcp add memory -s user -- \
 
 Here the database is created as `memory.db` next to the script. Either way,
 `MEMORY_DB=/some/path.db` puts it somewhere else.
+
+Don't need a tool? `MEMORY_TOOLS_OFF=edit` (comma-separated, English or
+German names) leaves it out, and its description no longer costs
+characters in every session.
 
 `-s user` makes the server available in all projects; the entry ends up in
 `~/.claude.json`. Restart Claude Code afterward — MCP servers are only
